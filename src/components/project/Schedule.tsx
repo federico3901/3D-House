@@ -76,7 +76,7 @@ export function Schedule({ project }: { project: Project }) {
               })}
               {today !== null && (
                 <span
-                  className="label absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-[2px] bg-ink px-1.5 py-0.5 text-[0.62rem] text-board"
+                  className="label absolute top-1/2 z-10 -translate-y-1/2 rounded-r-[2px] bg-ink px-1.5 py-0.5 text-[0.62rem] text-board"
                   style={{ left: `${(today / span) * 100}%` }}
                 >
                   {t.project.today}

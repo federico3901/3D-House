@@ -349,7 +349,7 @@ const demo: TenantData = {
               title: { it: "Soggiorno e cucina", en: "Living room and kitchen" },
               image: "/media/pano/app-soggiorno.jpg",
               thumb: "/media/pano/thumb-app-soggiorno.jpg",
-              startX: 0.55,
+              startX: 0.5,
               hotspots: [
                 { x: 0.06, y: 0.52, target: "camera", label: { it: "Camera", en: "Bedroom" } },
                 { x: 0.4, y: 0.52, target: "bagno", label: { it: "Bagno", en: "Bathroom" } },
