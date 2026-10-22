@@ -3,13 +3,14 @@
    sub-path and on hosts that don't map "folder/" to "folder/index.html" (a preview link, a file share, a sandboxed
    page). Run by `npm run build:portable`.
 
-   - URLs in the HTML that start at the domain root ("/_next/…", "/media/…", "/icon.svg") become relative to the page.
+   - URLs in the HTML that start at the domain root ("/_next/…", "/media/…", "/icon.svg") become relative to the page,
+     and the build files move to assets/_next/.
    - Links to pages ("/it/projects/") become relative links to their index.html.
    - A script at the top of every page records the site root (window.__CL_ROOT__, read by src/lib/paths.ts) and tells
      the Turbopack runtime where its chunks are (TURBOPACK_CHUNK_BASE_PATH, relative like the <script> tags).
    - start.html opens the site in the visitor's language. Left out: the RSC .txt files (only needed for client-side
-     navigation), the 404 pages and the root language gate. */
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+     navigation), the 404 pages, the root language gate and the polyfills for browsers without ES modules. */
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 
 const root = join(dirname(new URL(import.meta.url).pathname), "..");
@@ -22,6 +23,10 @@ rmSync(dst, { recursive: true, force: true });
 const skip = (p) =>
   p.endsWith(".txt") || p.endsWith(`${sep}404`) || p.endsWith("404.html") || p.includes(`${sep}_not-found`) || p === join(src, "index.html");
 cpSync(src, dst, { recursive: true, filter: (p) => !skip(p) });
+// Some hosts reserve top-level names starting with "_": the build files move to assets/_next/. Next finds its asset
+// prefix by looking for "/_next/" in its own script URL, so that segment stays.
+mkdirSync(join(dst, "assets"));
+renameSync(join(dst, "_next"), join(dst, "assets", "_next"));
 
 const walk = (dir) => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : [join(dir, f)]));
 const pages = walk(dst).filter((f) => f.endsWith(".html"));
@@ -32,22 +37,34 @@ const pageLink = (rel, path) => {
   return rel + file + (hash !== undefined ? `#${hash}` : "");
 };
 
+// Files only referenced by <script nomodule>, removed below with their tags.
+const legacy = new Set(
+  pages.flatMap((f) =>
+    [...readFileSync(f, "utf8").matchAll(/<script src="\/_next\/([^"]+)" noModule=""><\/script>/g)].map((m) => join(dst, "assets", "_next", m[1])),
+  ),
+);
+
 for (const file of pages) {
   const depth = relative(dst, dirname(file)).split(sep).filter(Boolean).length;
   const rel = "../".repeat(depth) || "./";
   let html = readFileSync(file, "utf8");
 
   // Files: in attributes ("/x) and inside the escaped React payload (\"/x).
-  html = html.replace(/(\\?")\/(_next\/|media\/|icon\.svg)/g, (_, q, rest) => `${q}${rel}${rest}`);
+  html = html.replace(/(\\?")\/(_next\/|media\/|icon\.svg)/g, (_, q, rest) => `${q}${rel}${rest === "_next/" ? "assets/_next/" : rest}`);
   // Pages: only real attributes; client-side links resolve through src/lib/paths.ts.
   html = html.replace(/(\shref=")\/((?:it|en)\/[^"]*|#[^"]*)?"/g, (_, attr, path = "") => `${attr}${pageLink(rel, path)}"`);
 
   // The runtime matches loaded chunks by the literal src attribute of their <script>, so its base is the same
   // relative prefix the attributes now carry.
-  const boot = `<script>(function(){var r=${JSON.stringify(rel)};window.__CL_ROOT__=new URL(r,location.href).pathname;window.TURBOPACK_CHUNK_BASE_PATH=r+"_next/";})();</script>`;
+  // The legacy-browser polyfills (<script nomodule>) are dropped: modern browsers never load them.
+  html = html.replace(/<script src="[^"]*" noModule=""><\/script>/g, "");
+
+  const boot = `<script>(function(){var r=${JSON.stringify(rel)};window.__CL_ROOT__=new URL(r,location.href).pathname;window.TURBOPACK_CHUNK_BASE_PATH=r+"assets/_next/";})();</script>`;
   html = html.replace(/<head>/, `<head>${boot}`);
   writeFileSync(file, html);
 }
+
+for (const f of legacy) rmSync(f, { force: true });
 
 // Entry page: written without <html>/<head>/<body>, so a host that wraps pages in its own skeleton can use it as is.
 writeFileSync(
