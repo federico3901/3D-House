@@ -118,6 +118,8 @@ export interface Project {
   tours: Tour[];
   /** Id of the map drawing in src/tenants/<id>/maps, if any. */
   map?: string;
+  /** Id of the building plan in src/tenants/plans.ts, if any: it drives the 3D view. Phases of one building share it. */
+  building?: string;
   sources: { label: string; url: string }[];
   note?: L10n;
 }
@@ -130,4 +132,73 @@ export interface TenantData {
   projects: Project[];
   /** Shown site-wide when set (e.g. "this is a demo"). */
   notice?: L10n;
+}
+
+/* Building plans: the floor plan as data, from which the 3D view is built. Lengths in metres; x runs along the front
+   façade (left to right seen from the street), y from the front façade to the back. Walls are generated from the room
+   outlines, so a plan is a list of rooms per floor plus the doors and windows; edges must be horizontal or vertical. */
+
+export type RoomKind =
+  | "living"
+  | "kitchen"
+  | "bedroom"
+  | "bathroom"
+  | "entrance"
+  | "hall"
+  | "storage"
+  | "balcony"
+  | "terrace"
+  | "garden"
+  | "lobby"
+  | "landing"
+  | "stairs"
+  | "lift"
+  | "shaft"
+  | "plant";
+
+export type Point = [number, number];
+
+export interface PlanRoom {
+  id: string;
+  kind: RoomKind;
+  /** Overrides the default name of the kind. */
+  name?: L10n;
+  poly: Point[];
+}
+
+export interface PlanOpening {
+  kind: "door" | "window" | "french" | "opening";
+  /** Centre of the opening, on a wall line. */
+  at: Point;
+  width: number;
+}
+
+export interface PlanFloor {
+  id: string;
+  level: number;
+  name: L10n;
+  /** Slug of the project (phase) the floor belongs to. */
+  project?: string;
+  /** Rooms of each apartment (unitId matches Unit.id), outdoor spaces included. */
+  units: { unitId: string; rooms: PlanRoom[] }[];
+  /** Stairs, lift, landing, plant areas. */
+  common: PlanRoom[];
+  openings: PlanOpening[];
+  /** A roof: parapets instead of walls. */
+  roof?: boolean;
+  /** Boxes on the floor (heat pumps, lift overrun): x, y, width, depth, height. */
+  equipment?: { kind: "heatpump" | "housing"; box: [number, number, number, number, number] }[];
+}
+
+export interface BuildingPlan {
+  id: string;
+  name: string;
+  /** True when the plan is drawn for the demo and not taken from the project's drawings. */
+  illustrative: boolean;
+  footprint: Point[];
+  /** Floor-to-floor height and slab thickness. */
+  storey: number;
+  slab: number;
+  street?: string;
+  floors: PlanFloor[];
 }

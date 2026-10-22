@@ -22,6 +22,16 @@ export function ContactSection({ defaultProject = "" }: { defaultProject?: strin
       setState("idle");
     };
     window.addEventListener("cl:ask", onAsk);
+    // A request started on another page (the 3D view) waits in this tab's session storage.
+    try {
+      const pending = sessionStorage.getItem("cl:ask");
+      if (pending) {
+        sessionStorage.removeItem("cl:ask");
+        onAsk(new CustomEvent("cl:ask", { detail: JSON.parse(pending) }));
+      }
+    } catch {
+      /* nothing pending, or storage blocked */
+    }
     return () => window.removeEventListener("cl:ask", onAsk);
   }, []);
 

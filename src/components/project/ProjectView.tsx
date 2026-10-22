@@ -14,8 +14,8 @@ import { Gallery } from "./Gallery";
 import { Schedule } from "./Schedule";
 import { Units } from "./Units";
 
-/** A project page. `map` is the server-rendered neighbourhood drawing. */
-export function ProjectView({ slug, map }: { slug: string; map?: React.ReactNode }) {
+/** A project page. `map` and `model` are server-rendered drawings: the neighbourhood, and the exploded floor plans. */
+export function ProjectView({ slug, map, model }: { slug: string; map?: React.ReactNode; model?: React.ReactNode }) {
   const project = useProject(slug);
   const { brand } = useTenant();
   const { locale, t } = useLocale();
@@ -30,6 +30,7 @@ export function ProjectView({ slug, map }: { slug: string; map?: React.ReactNode
     { id: "avanzamento", label: t.project.progress, show: true },
     { id: "diario", label: t.project.diary, show: project.updates.length > 0 },
     { id: "tour", label: t.project.tour, show: project.tours.length > 0 },
+    { id: "edificio", label: t.project.modelShort, show: !!model },
     { id: "appartamenti", label: t.project.units, show: project.units.length > 0 },
     { id: "posizione", label: t.project.location, show: true },
   ].filter((s) => s.show);
@@ -57,6 +58,12 @@ export function ProjectView({ slug, map }: { slug: string; map?: React.ReactNode
               <AppLink href={`/${locale}/projects/${project.slug}/tour/`} className="btn btn-brand">
                 <Icon name="pano" />
                 {t.projects.tour}
+              </AppLink>
+            )}
+            {model && (
+              <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="btn btn-ink">
+                <Icon name="cube" />
+                {t.project.modelShort}
               </AppLink>
             )}
             <button
@@ -183,6 +190,32 @@ export function ProjectView({ slug, map }: { slug: string; map?: React.ReactNode
               </div>
             </div>
             <TourPlayer key={tour.id} tour={tour} fullscreenHref={`/${locale}/projects/${project.slug}/tour/`} />
+          </div>
+        </section>
+      )}
+
+      {model && (
+        <section id="edificio" className="on-night scroll-mt-32 border-t border-night-line bg-[#000] text-night-ink">
+          <div
+            className="wrap grid items-center gap-10 py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+              backgroundSize: "48px 48px",
+            }}
+          >
+            <div className="grid content-start gap-5">
+              <p className="label text-[#53e2cf]">{t.project.modelPlan}</p>
+              <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.project.model}</h2>
+              <p className="max-w-[56ch] text-night-mute">{t.project.modelLead}</p>
+              <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="btn w-fit bg-[#53e2cf] text-black hover:bg-[#7cebdc]">
+                <Icon name="cube" />
+                {t.project.modelOpen}
+              </AppLink>
+            </div>
+            <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="block max-h-[620px] overflow-hidden" aria-label={t.project.modelOpen}>
+              {model}
+            </AppLink>
           </div>
         </section>
       )}

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { askAbout } from "@/components/home/ContactSection";
+import { AppLink } from "@/components/ui/AppLink";
+import { Icon } from "@/components/ui/Icon";
 import { UnitStatusChip } from "@/components/ui/Status";
 import { floorLabel } from "@/lib/format";
 import { useLocale } from "@/lib/locale";
@@ -67,12 +69,24 @@ export function Units({ project }: { project: Project }) {
                 <td className="px-4 py-3">
                   <UnitStatusChip status={u.status} />
                 </td>
-                <td className="px-4 py-3 text-right">
-                  {u.status !== "sold" && (
-                    <button type="button" onClick={() => ask(u)} className="btn btn-line min-h-9 px-3 py-1.5 text-[0.85rem]">
-                      {t.project.ask}
-                    </button>
-                  )}
+                <td className="px-4 py-3">
+                  <span className="flex items-center justify-end gap-2">
+                    {project.building && (
+                      <AppLink
+                        href={`/${locale}/projects/${project.slug}/3d/#${u.id}`}
+                        className="grid h-9 w-9 place-items-center rounded-[var(--radius)] border border-line-strong text-ink-2 hover:border-ink hover:text-ink"
+                        title={t.project.unit3d}
+                        aria-label={`${t.project.unit3d}: ${u.name}`}
+                      >
+                        <Icon name="cube" size={18} />
+                      </AppLink>
+                    )}
+                    {u.status !== "sold" && (
+                      <button type="button" onClick={() => ask(u)} className="btn btn-line min-h-9 px-3 py-1.5 text-[0.85rem]">
+                        {t.project.ask}
+                      </button>
+                    )}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -94,11 +108,19 @@ export function Units({ project }: { project: Project }) {
             <span className="text-[0.85rem] text-mute">
               {t.project.floor} {floorLabel(u.floor, locale)} · {outdoor(u)}
             </span>
-            {u.status !== "sold" && (
-              <button type="button" onClick={() => ask(u)} className="btn btn-line col-span-3 mt-2 min-h-10 py-1.5 text-[0.9rem]">
-                {t.project.ask}
-              </button>
-            )}
+            <span className="col-span-3 mt-2 flex gap-2">
+              {project.building && (
+                <AppLink href={`/${locale}/projects/${project.slug}/3d/#${u.id}`} className="btn btn-line min-h-10 flex-1 py-1.5 text-[0.9rem]">
+                  <Icon name="cube" size={18} />
+                  {t.project.unit3d}
+                </AppLink>
+              )}
+              {u.status !== "sold" && (
+                <button type="button" onClick={() => ask(u)} className="btn btn-line min-h-10 flex-1 py-1.5 text-[0.9rem]">
+                  {t.project.ask}
+                </button>
+              )}
+            </span>
           </li>
         ))}
       </ul>

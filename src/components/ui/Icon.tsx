@@ -73,6 +73,12 @@ const paths: Record<string, React.ReactNode> = {
     </>
   ),
   trash: <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5" />,
+  cube: (
+    <>
+      <path d="M12 2.5 21 7.5v9l-9 5-9-5v-9z" />
+      <path d="M3 7.5 12 12.5l9-5M12 12.5v9" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof paths;

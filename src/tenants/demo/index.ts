@@ -2,8 +2,8 @@ import type { TenantData } from "@/lib/types";
 
 /* The demo impresa. The brand is fictitious; the project is real: Grazioli 57, a residential conversion in Affori
    (Milano). Address, 15 apartments, 50–100 m² one- and two-bedroom layouts, heat pump, lift, two phases and the
-   July 2027 handover of phase 2 come from Urbanfile (September 2026). Progress, units, dates of phase 1, photos and
-   360° tours are illustrative, and every page says so. */
+   July 2027 handover of phase 2 come from Urbanfile (September 2026). Progress, units, the floor plan (plans/), dates of
+   phase 1, photos and 360° tours are illustrative, and every page says so. */
 
 const SOURCE = {
   label: "Urbanfile, «Milano: Affori, cantieri attivi e fermi in zona» (settembre 2026)",
@@ -11,8 +11,8 @@ const SOURCE = {
 };
 
 const NOTE = {
-  it: "Progetto reale usato come esempio. Indirizzo, numero di appartamenti, tagli, impianti e consegna della fase 2 vengono da fonti pubbliche; impresa, avanzamento, unità, date della fase 1, foto e tour 360° sono illustrativi.",
-  en: "A real project used as an example. Address, number of apartments, layouts, building services and the phase 2 handover come from public sources; the builder, progress, units, phase 1 dates, photos and 360° tours are illustrative.",
+  it: "Progetto reale usato come esempio. Indirizzo, numero di appartamenti, tagli, impianti e consegna della fase 2 vengono da fonti pubbliche; impresa, avanzamento, unità, piantina e modello 3D, date della fase 1, foto e tour 360° sono illustrativi.",
+  en: "A real project used as an example. Address, number of apartments, layouts, building services and the phase 2 handover come from public sources; the builder, progress, units, floor plan and 3D model, phase 1 dates, photos and 360° tours are illustrative.",
 };
 
 const LOCATION = {
@@ -44,7 +44,7 @@ const FEATURES = [
 ];
 
 const demo: TenantData = {
-  version: 1,
+  version: 2,
   id: "demo",
   brand: {
     name: "Demo Costruzioni",
@@ -225,12 +225,12 @@ const demo: TenantData = {
         },
       ],
       units: [
-        { id: "A1", name: "A1", floor: 0, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "garden", area: 35 }, status: "sold", price: null },
-        { id: "A2", name: "A2", floor: 0, rooms: 3, bathrooms: 2, area: 86, outdoor: { kind: "garden", area: 60 }, status: "reserved", price: null },
-        { id: "A3", name: "A3", floor: 0, rooms: 2, bathrooms: 1, area: 55, outdoor: { kind: "garden", area: 30 }, status: "available", price: null },
-        { id: "B1", name: "B1", floor: 1, rooms: 3, bathrooms: 2, area: 98, outdoor: { kind: "balcony", area: 12 }, status: "available", price: null },
-        { id: "B2", name: "B2", floor: 1, rooms: 2, bathrooms: 1, area: 60, outdoor: { kind: "balcony", area: 8 }, status: "sold", price: null },
-        { id: "B3", name: "B3", floor: 1, rooms: 3, bathrooms: 2, area: 92, outdoor: { kind: "balcony", area: 10 }, status: "available", price: null },
+        { id: "A1", name: "A1", floor: 0, rooms: 2, bathrooms: 1, area: 52, status: "sold", price: null },
+        { id: "A2", name: "A2", floor: 0, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "garden", area: 59 }, status: "reserved", price: null },
+        { id: "A3", name: "A3", floor: 0, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "garden", area: 35 }, status: "available", price: null },
+        { id: "B1", name: "B1", floor: 1, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "balcony", area: 10 }, status: "available", price: null },
+        { id: "B2", name: "B2", floor: 1, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
+        { id: "B3", name: "B3", floor: 1, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "available", price: null },
       ],
       tours: [
         {
@@ -262,6 +262,7 @@ const demo: TenantData = {
         },
       ],
       map: "grazioli-57",
+      building: "grazioli-57",
       sources: [SOURCE],
       note: NOTE,
     },
@@ -328,15 +329,15 @@ const demo: TenantData = {
         },
       ],
       units: [
-        { id: "C1", name: "C1", floor: 2, rooms: 2, bathrooms: 1, area: 50, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
-        { id: "C2", name: "C2", floor: 2, rooms: 3, bathrooms: 2, area: 88, outdoor: { kind: "balcony", area: 10 }, status: "sold", price: null },
-        { id: "C3", name: "C3", floor: 2, rooms: 2, bathrooms: 1, area: 54, status: "sold", price: null },
-        { id: "D1", name: "D1", floor: 3, rooms: 2, bathrooms: 1, area: 50, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
-        { id: "D2", name: "D2", floor: 3, rooms: 3, bathrooms: 2, area: 90, outdoor: { kind: "balcony", area: 10 }, status: "sold", price: null },
-        { id: "D3", name: "D3", floor: 3, rooms: 2, bathrooms: 1, area: 56, status: "sold", price: null },
+        { id: "C1", name: "C1", floor: 2, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
+        { id: "C2", name: "C2", floor: 2, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "balcony", area: 10 }, status: "sold", price: null },
+        { id: "C3", name: "C3", floor: 2, rooms: 2, bathrooms: 1, area: 52, status: "sold", price: null },
+        { id: "D1", name: "D1", floor: 3, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
+        { id: "D2", name: "D2", floor: 3, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "balcony", area: 10 }, status: "sold", price: null },
+        { id: "D3", name: "D3", floor: 3, rooms: 2, bathrooms: 1, area: 52, status: "sold", price: null },
         { id: "E1", name: "E1", floor: 4, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "terrace", area: 50 }, status: "sold", price: null },
-        { id: "E2", name: "E2", floor: 4, rooms: 3, bathrooms: 2, area: 100, outdoor: { kind: "terrace", area: 40 }, status: "sold", price: null },
-        { id: "E3", name: "E3", floor: 4, rooms: 2, bathrooms: 1, area: 58, outdoor: { kind: "balcony", area: 8 }, status: "sold", price: null },
+        { id: "E2", name: "E2", floor: 4, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "terrace", area: 40 }, status: "sold", price: null },
+        { id: "E3", name: "E3", floor: 4, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
       ],
       tours: [
         {
@@ -375,6 +376,7 @@ const demo: TenantData = {
         },
       ],
       map: "grazioli-57",
+      building: "grazioli-57",
       sources: [SOURCE],
       note: NOTE,
     },

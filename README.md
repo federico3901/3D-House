@@ -2,7 +2,7 @@
 
 Sito web pronto per le imprese edili: cantieri in corso con avanzamento per fase, diario dei lavori, case realizzate, appartamenti disponibili e tour virtuali 360°, in italiano e in inglese. Lo stesso codice serve qualsiasi impresa: si cambiano i dati e il brand, non il codice.
 
-La demo usa un'impresa fittizia (**Demo Costruzioni**) e un progetto reale nel milanese: **Grazioli 57**, conversione residenziale ad Affori (Milano). È una piccola palazzina con 15 appartamenti, bilocali e trilocali tra 50 e 100 m², pompa di calore autonoma e ascensore. La fase 1 è consegnata, la fase 2 è in corso con consegna a luglio 2027. Fonte: [Urbanfile, settembre 2026](https://blog.urbanfile.org/2026/09/23/milano-affori-cantieri-attivi-e-fermi-in-zona-settembre-2026/). Avanzamento, unità, date della fase 1, foto e tour sono illustrativi, e il sito lo dichiara in ogni pagina.
+La demo usa un'impresa fittizia (**Demo Costruzioni**) e un progetto reale nel milanese: **Grazioli 57**, conversione residenziale ad Affori (Milano). È una piccola palazzina con 15 appartamenti, bilocali e trilocali tra 50 e 100 m², pompa di calore autonoma e ascensore. La fase 1 è consegnata, la fase 2 è in corso con consegna a luglio 2027. Fonte: [Urbanfile, settembre 2026](https://blog.urbanfile.org/2026/09/23/milano-affori-cantieri-attivi-e-fermi-in-zona-settembre-2026/). Avanzamento, unità, piantina e modello 3D, date della fase 1, foto e tour sono illustrativi, e il sito lo dichiara in ogni pagina.
 
 ## Cosa c'è
 
@@ -11,6 +11,7 @@ La demo usa un'impresa fittizia (**Demo Costruzioni**) e un progetto reale nel m
 | Home `/it/`, `/en/` | Hero con il cantiere "dal vivo" (avanzamento, fase in corso, ultimo aggiornamento), cantieri in corso, case realizzate, contatti |
 | Progetti `/it/projects/` | Elenco filtrabile per stato |
 | Progetto `/it/projects/<slug>/` | Galleria foto, cartello di cantiere, scheda, cronoprogramma (Gantt) con la linea di oggi, diario di cantiere, tour 360°, tabella appartamenti con disponibilità, mappa della zona, fonti, modulo contatti precompilato |
+| Edificio 3D `/it/projects/<slug>/3d/` | Modello 3D generato dalla piantina, nello stile dell'«Atlante delle Forniture» (console scura Silhouette o chiara Gesso). I piani si separano con lo slider dell'esploso; un piano scelto si isola, un appartamento scelto mostra contorno, stanze con superfici, disponibilità e "Chiedi info". Viste 3/4, pianta e fronte, quote, nomi delle stanze, nastro della disponibilità. `…/3d/#B1` apre direttamente un appartamento |
 | Tour `/it/projects/<slug>/tour/` | Tour 360° a schermo intero: trascinamento, zoom (rotella, pizzico, tastiera), rotazione automatica, punti cliccabili tra gli ambienti |
 | Area impresa `/it/admin/` | L'impresa aggiorna l'avanzamento delle fasi, pubblica voci di diario con foto, cambia lo stato degli appartamenti, le date e lo stato del progetto, aggiunge tour esterni (Matterport, Kuula…) e personalizza il brand (nome, sigla, colore, slogan, contatti). Le modifiche compaiono subito sul sito, anche nelle altre schede aperte |
 
@@ -37,9 +38,20 @@ Ogni impresa è una cartella in `src/tenants/<id>/`:
   ```bash
   node scripts/build-map.mjs --bbox minLon,minLat,maxLon,maxLat --pin lat,lng --out src/tenants/<id>/maps/<progetto>.json
   ```
+- `plans/*.ts`: la piantina di ogni edificio, da cui nasce il modello 3D (vedi sotto). Un progetto la collega con `building: "<id>"`; le fasi dello stesso edificio condividono la stessa piantina.
 - le foto e i panorami 360° (equirettangolari 2:1) in `public/media/`.
 
 Si registra l'impresa in `src/tenants/index.ts` e si fa la build con `TENANT=<id> npm run build`: una build, un sito statico, un dominio. Il colore del brand guida bottoni, barre di avanzamento ed evidenziazioni, e il testo sopra il colore passa da scuro a chiaro in automatico.
+
+## Piantina e modello 3D
+
+La piantina è un file di dati (`BuildingPlan` in `src/lib/types.ts`), in metri: `x` lungo la facciata su strada, `y` verso il retro. Per ogni piano:
+
+- le **stanze** di ogni appartamento (`unitId` uguale a quello della tabella appartamenti) e delle parti comuni, come poligoni con lati orizzontali o verticali, tipo `soggiorno`, `camera`, `bagno`, `balcone`, `terrazzo`, `giardino`, `scala`, `ascensore`…;
+- le **aperture**: porte, finestre, portefinestre e varchi, indicate dal loro centro su un muro e dalla larghezza;
+- per la copertura, `roof: true` e gli **ingombri** (pompe di calore, extracorsa dell'ascensore, torrino scala).
+
+Le pareti si generano da sole dai contorni delle stanze: 30 cm verso l'esterno, 22 cm tra appartamenti o verso le parti comuni, 10 cm tra stanze dello stesso appartamento, con le aperture ritagliate (architrave sopra le porte, davanzale sotto le finestre). Il disegno aggiunge da solo l'apertura delle porte, i vetri delle finestre, le rampe delle scale, i parapetti di balconi e terrazzi e il contorno di ogni appartamento. Le superfici delle stanze si calcolano dai poligoni. Un editor visuale della piantina è il passo successivo; per ora la si scrive come la piantina di esempio, `src/tenants/demo/plans/grazioli-57.ts`.
 
 ## Struttura
 
@@ -48,6 +60,7 @@ src/app/[locale]/(site)/        home, progetti, progetto, area impresa (con head
 src/app/[locale]/(immersive)/   tour a schermo intero
 src/app/(gate)/                 "/" → lingua del browser
 src/components/tour/            visore 360° (three.js) e controlli
+src/components/building3d/      modello 3D: dalla piantina alla geometria (plan.ts), motore three.js (engine.ts), console (Building3D.tsx), anteprima SVG
 src/components/project/         galleria, cronoprogramma, diario, appartamenti
 src/components/admin/           area impresa
 src/components/map/             mappa SVG da OpenStreetMap, senza servizi esterni
@@ -60,6 +73,7 @@ scripts/                        mappa, build portabile, test end-to-end
 
 - Database e account per l'area impresa, con le modifiche pubblicate per tutti i visitatori (oggi restano nel browser).
 - Caricamento di foto e panorami dall'area impresa, invece della scelta tra quelli già presenti.
+- Editor visuale della piantina nell'area impresa, e importazione da DXF o PDF dei disegni di progetto.
 - Invio reale del modulo contatti (email o CRM dell'impresa).
 - Più imprese su un solo deploy, scelte in base al dominio, invece di una build per impresa.
 - Planimetrie degli appartamenti e notifiche ai clienti a ogni nuovo aggiornamento del diario.
