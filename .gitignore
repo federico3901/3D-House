@@ -44,3 +44,6 @@ next-env.d.ts
 
 # portable build (npm run build:portable)
 /portable/
+
+# responsive images (npm run images, run before dev and build)
+/public/media/r/

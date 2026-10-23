@@ -23,8 +23,21 @@ export function shortDate(ymd: string): string {
   return d && m && y ? `${d}.${m}.${y.slice(2)}` : ymd;
 }
 
-export const floorLabel = (floor: number, locale: Locale) =>
-  floor === 0 ? dictionaries[locale].groundFloor : locale === "it" ? `${floor}°` : ordinal(floor);
+/** 1234567.5 → "1.234.567,5" / "1,234,567.5". Written out by hand: the server's and the browser's number formats
+    can differ (it-IT groups 4-digit numbers in some versions and not in others), and the page must hydrate. */
+export function formatNumber(n: number, locale: Locale, decimals = 0, minDecimals = 0): string {
+  const [sep, dec] = locale === "it" ? [".", ","] : [",", "."];
+  const fixed = Math.abs(n).toFixed(decimals);
+  let [int, frac = ""] = fixed.split(".");
+  frac = frac.replace(/0+$/, "").padEnd(minDecimals, "0");
+  int = int.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+  return (n < 0 && Number(fixed) !== 0 ? "-" : "") + int + (frac ? dec + frac : "");
+}
+
+/** 468000 → "468.000 €" / "€468,000" */
+export const euro = (n: number, locale: Locale) => (locale === "it" ? `${formatNumber(Math.round(n), locale)} €` : `€${formatNumber(Math.round(n), locale)}`);
+
+export const floorLabel = (floor: number, locale: Locale) => (floor === 0 ? dictionaries[locale].groundFloor : locale === "it" ? `${floor}°` : ordinal(floor));
 
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
 

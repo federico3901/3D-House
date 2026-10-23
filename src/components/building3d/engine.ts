@@ -4,13 +4,13 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { facadeBearing, facadeLight, type SunPosition } from "@/lib/sun";
 import type { Point } from "@/lib/types";
 import type { Palette, RGBA } from "./palette";
-import type { Box, Building, Floor, Room, Seg } from "./plan";
+import { facades, type Box, type Building, type Floor, type Room, type Seg } from "./plan";
 
-/* The imperative side of the 3D view: builds the floors in the «technical drawing» style of the Atlante delle
-   Forniture (translucent fills that only show the front-most surface, crisp edges, hidden edges dashed, a glow on the
-   selection), eases the explode and focus state every frame, frames the camera on what is shown, and places the DOM
+/* The imperative side of the 3D view: builds the floors as a technical drawing (translucent fills that only show the
+   front-most surface, crisp edges, hidden edges dashed, a highlighter glow around the selection), eases the explode and focus state every frame, frames the camera on what is shown, and places the DOM
    labels React renders in the overlay. React only feeds it inputs. */
 
 const FOV = 28;
@@ -38,6 +38,11 @@ export interface Layers {
   labels: boolean;
   dims: boolean;
 }
+/** The sun now, and its path over the day. */
+export interface SunState {
+  now: SunPosition;
+  path: SunPosition[];
+}
 export interface EngineEvents {
   hover(roomId: string | null): void;
   pick(target: Focus): void;
@@ -62,13 +67,19 @@ interface FloorRT {
   railings: LineMaterial;
   tiles: Tile[];
   outlines: Map<string, { line: LineMaterial; halo: LineMaterial; show: number }>;
+  /** The outside walls, lit in sun mode: one sheet per façade, with the bearing it faces. */
+  lit: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; bearing: number }[];
   y: number;
   dim: number;
   lift: number;
 }
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-const approach = (cur: number, tgt: number, dt: number, rate = 9) => cur + (tgt - cur) * (1 - Math.exp(-dt * rate));
+/** Eases towards a target and lands on it exactly, so a settled scene can be told from a moving one. */
+const approach = (cur: number, tgt: number, dt: number, rate = 9) => {
+  const v = cur + (tgt - cur) * (1 - Math.exp(-dt * rate));
+  return Math.abs(tgt - v) < 1e-3 ? tgt : v;
+};
 const setRGB = (c: THREE.Color, x: RGBA) => c.setRGB(x.r, x.g, x.b, THREE.SRGBColorSpace);
 
 export class BuildingEngine {
@@ -97,6 +108,8 @@ export class BuildingEngine {
   private orient = { phi: THREE.MathUtils.degToRad(90 - VIEWS.axo.el), theta: THREE.MathUtils.degToRad(VIEWS.axo.az) };
   private anim: { from: THREE.Spherical; to: THREE.Spherical; tFrom: THREE.Vector3; tTo: THREE.Vector3; t: number; dur: number } | null = null;
   private raf = 0;
+  /** A frame is drawn only when something changed: input, an easing still running, the camera moving. */
+  private dirty = true;
   private last = performance.now();
   private reduced = false;
   private overlay: HTMLElement;
@@ -109,6 +122,8 @@ export class BuildingEngine {
     target: null as HTMLElement | null,
     dims: new Map<string, HTMLElement>(),
     street: null as HTMLElement | null,
+    north: null as HTMLElement | null,
+    sun: null as HTMLElement | null,
   };
   private raycaster = new THREE.Raycaster();
   /** Label sizes, measured once: they only change when the overlay is re-rendered. */
@@ -117,6 +132,16 @@ export class BuildingEngine {
   private pointer = { x: 0, y: 0, down: null as null | { x: number; y: number }, inside: false };
   private ro: ResizeObserver;
   private host: HTMLElement;
+  private sun: SunState | null = null;
+  private sunRT: {
+    group: THREE.Group;
+    path: { obj: LineSegments2; geo: LineSegmentsGeometry; mat: LineMaterial };
+    drop: { obj: LineSegments2; geo: LineSegmentsGeometry; mat: LineMaterial };
+    disc: THREE.Mesh;
+    glow: THREE.Mesh;
+    radius: number;
+  } | null = null;
+  private compass: LineMaterial | null = null;
 
   constructor(
     host: HTMLElement,
@@ -144,6 +169,10 @@ export class BuildingEngine {
     for (const f of b.floors) this.floors.push(this.buildFloor(f));
     this.dims = this.buildDims();
     this.context = this.buildContext();
+    if (b.plan.facing !== undefined) {
+      this.compass = this.buildCompass();
+      this.sunRT = this.buildSun();
+    }
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -153,6 +182,7 @@ export class BuildingEngine {
     this.controls.maxDistance = 400;
     this.controls.maxPolarAngle = THREE.MathUtils.degToRad(92);
     this.controls.addEventListener("start", () => (this.anim = null));
+    this.controls.addEventListener("change", () => (this.dirty = true));
     this.controls.addEventListener("end", () => {
       const sp = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
       this.orient = { phi: sp.phi, theta: sp.theta };
@@ -176,6 +206,7 @@ export class BuildingEngine {
 
   setPalette(p: Palette) {
     this.pal = p;
+    this.dirty = true;
     setRGB(this.signal, p.signal);
     for (const rt of this.floors) {
       setRGB(rt.fill.color, p.edge);
@@ -186,12 +217,61 @@ export class BuildingEngine {
       setRGB(rt.railings.color, p.mute);
       for (const tile of rt.tiles) setRGB(tile.mat.color, p.group[tile.room.group]);
       for (const o of rt.outlines.values()) {
-        setRGB(o.line.color, p.signal);
+        setRGB(o.line.color, p.select);
         setRGB(o.halo.color, p.signal);
       }
     }
     setRGB(this.dims.line.color, p.mute);
     setRGB(this.context.color, p.mute);
+    if (this.compass) setRGB(this.compass.color, p.ink);
+    for (const rt of this.floors) for (const l of rt.lit) setRGB(l.mat.color, p.signal);
+    if (this.sunRT) {
+      setRGB(this.sunRT.path.mat.color, p.ink);
+      setRGB(this.sunRT.drop.mat.color, p.ink);
+      setRGB((this.sunRT.disc.material as THREE.MeshBasicMaterial).color, p.signal);
+      setRGB((this.sunRT.glow.material as THREE.MeshBasicMaterial).color, p.signal);
+    }
+  }
+
+  /** Sun mode: where the sun is and its path, or null to leave it. */
+  setSun(sun: SunState | null) {
+    const was = this.sun !== null;
+    this.sun = sun;
+    this.dirty = true;
+    const rt = this.sunRT;
+    if (!rt) return;
+    rt.group.visible = !!sun;
+    if (sun) {
+      const up = sun.path.filter((p) => p.altitude > -1);
+      const pos: number[] = [];
+      for (let i = 0; i < up.length - 1; i++) {
+        const a = this.sunPoint(up[i]);
+        const b = this.sunPoint(up[i + 1]);
+        pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+      if (pos.length) {
+        rt.path.geo.setPositions(pos);
+        rt.path.obj.computeLineDistances();
+      }
+      const p = this.sunPoint(sun.now);
+      const above = sun.now.altitude > 0;
+      rt.disc.position.copy(p);
+      rt.glow.position.copy(p);
+      rt.disc.visible = rt.glow.visible = above;
+      // From the sun down to the ground, then back to the building: its height and its bearing.
+      const g = new THREE.Vector3(p.x, 0, p.z);
+      rt.drop.geo.setPositions([p.x, p.y, p.z, g.x, 0, g.z, g.x, 0, g.z, 0, 0, 0]);
+      rt.drop.obj.computeLineDistances();
+      rt.drop.obj.visible = above;
+    }
+    if (was !== !!sun) {
+      // Turn to the sunny side, a little off the sun's bearing, so the lit façades face the camera.
+      if (sun) {
+        const d = this.dirOf(sun.now.altitude > 0 ? sun.now.azimuth : 180);
+        this.orient = { phi: THREE.MathUtils.degToRad(90 - 30), theta: Math.atan2(d.x, d.z) + THREE.MathUtils.degToRad(30) };
+      }
+      this.frame(true, 0.8);
+    }
   }
 
   setExplode(v: number) {
@@ -213,10 +293,12 @@ export class BuildingEngine {
 
   setHover(roomId: string | null) {
     this.hoverRoom = roomId;
+    this.dirty = true;
   }
 
   setLayers(l: Layers) {
     this.layers = { ...l };
+    this.dirty = true;
   }
 
   setPads(p: Pads) {
@@ -227,6 +309,7 @@ export class BuildingEngine {
 
   /** Re-reads the label elements React rendered in the overlay. */
   refreshOverlay() {
+    this.dirty = true;
     const q = <T extends Element>(sel: string) => [...this.overlay.querySelectorAll<T & HTMLElement>(sel)];
     this.els.leaders = new Map(q<HTMLElement>("[data-leader]").map((e) => [e.dataset.leader!, e]));
     this.els.lines = new Map(q<SVGLineElement>("[data-leader-line]").map((e) => [e.dataset.leaderLine!, e as unknown as SVGLineElement]));
@@ -236,6 +319,8 @@ export class BuildingEngine {
     this.els.chip = this.overlay.querySelector<HTMLElement>("[data-chip]");
     this.els.target = this.overlay.querySelector<HTMLElement>("[data-target]");
     this.els.street = this.overlay.querySelector<HTMLElement>("[data-street]");
+    this.els.north = this.overlay.querySelector<HTMLElement>("[data-north]");
+    this.els.sun = this.overlay.querySelector<HTMLElement>("[data-sun]");
     this.sizes.clear();
   }
 
@@ -271,6 +356,17 @@ export class BuildingEngine {
 
   /* ------------------------------------------------------------ building */
 
+  /** World direction of a compass bearing (and an altitude above the horizon). */
+  private dirOf(bearing: number, altitude = 0) {
+    const o = THREE.MathUtils.degToRad(bearing - (this.b.plan.facing ?? 0));
+    const h = THREE.MathUtils.degToRad(altitude);
+    return new THREE.Vector3(-Math.sin(o) * Math.cos(h), Math.sin(h), Math.cos(o) * Math.cos(h));
+  }
+
+  private sunPoint(p: SunPosition) {
+    return this.dirOf(p.azimuth, Math.max(0, p.altitude)).multiplyScalar(this.sunRT?.radius ?? 20);
+  }
+
   /** World position of a plan point at height h above the top of a floor whose group sits at y. */
   private world(x: number, h: number, y: number, floorY = 0) {
     return new THREE.Vector3(x - this.cx, floorY + this.b.plan.slab + h, -(y - this.cy));
@@ -286,7 +382,10 @@ export class BuildingEngine {
     return this.lineFromPositions(pos, opts);
   }
 
-  private lineFromPositions(pos: Float32Array | number[], opts: { width?: number; dashed?: number; depthFunc?: THREE.DepthModes; depthTest?: boolean; order?: number }) {
+  private lineFromPositions(
+    pos: Float32Array | number[],
+    opts: { width?: number; dashed?: number; depthFunc?: THREE.DepthModes; depthTest?: boolean; order?: number },
+  ) {
     const geo = new LineSegmentsGeometry();
     geo.setPositions(pos as Float32Array);
     const mat = new LineMaterial({ linewidth: opts.width ?? 1, transparent: true, depthWrite: false, worldUnits: false });
@@ -375,7 +474,110 @@ export class BuildingEngine {
       outlines.set(u.unitId, { line: line.mat, halo: halo.mat, show: 0 });
     }
 
-    return { f, group, fill, depth, edges: edges.mat, hidden: hidden.mat, details: details.mat, railings: railings.mat, tiles, outlines, y: 0, dim: 0, lift: 0 };
+    // A sheet just outside each façade, coloured in sun mode by the light falling on it.
+    const lit: FloorRT["lit"] = [];
+    if (!f.roof && this.b.plan.facing !== undefined) {
+      for (const fc of facades(this.b.plan)) {
+        const len = Math.hypot(fc.b[0] - fc.a[0], fc.b[1] - fc.a[1]);
+        const g = new THREE.PlaneGeometry(len + 0.4, this.b.wallHeight);
+        const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+        const mesh = new THREE.Mesh(g, mat);
+        const [nx, ny] = fc.normal;
+        mesh.position.copy(this.world((fc.a[0] + fc.b[0]) / 2 + nx * 0.2, this.b.wallHeight / 2, (fc.a[1] + fc.b[1]) / 2 + ny * 0.2));
+        mesh.rotation.y = Math.atan2(nx, -ny);
+        mesh.renderOrder = 1;
+        mesh.visible = false;
+        mesh.raycast = () => {};
+        group.add(mesh);
+        this.disposables.push(g, mat);
+        lit.push({ mesh, mat, bearing: facadeBearing(fc.normal, this.b.plan.facing) });
+      }
+    }
+
+    return {
+      f,
+      group,
+      fill,
+      depth,
+      edges: edges.mat,
+      hidden: hidden.mat,
+      details: details.mat,
+      railings: railings.mat,
+      tiles,
+      outlines,
+      lit,
+      y: 0,
+      dim: 0,
+      lift: 0,
+    };
+  }
+
+  /** A north arrow on the ground, left of the building. */
+  private buildCompass() {
+    const c: Point = [this.b.x0 - 6.5, this.b.y0 + 2.5];
+    const r = 1.5;
+    const segs: Seg[] = [];
+    const at = (bearing: number, d: number): Point => {
+      const v = this.dirOf(bearing);
+      // Back from world to plan: x = wx, y = -wz.
+      return [c[0] + v.x * d, c[1] - v.z * d];
+    };
+    for (let i = 0; i < 48; i++) {
+      const p = at(i * 7.5, r);
+      const q = at((i + 1) * 7.5, r);
+      segs.push([p[0], 0.02, p[1], q[0], 0.02, q[1]]);
+    }
+    const tip = at(0, r + 1.6);
+    const tail = at(180, r);
+    const l = at(-150, 0.8).map((v, i) => v + tip[i] - c[i]) as Point;
+    const rr = at(150, 0.8).map((v, i) => v + tip[i] - c[i]) as Point;
+    segs.push([tail[0], 0.02, tail[1], tip[0], 0.02, tip[1]], [l[0], 0.02, l[1], tip[0], 0.02, tip[1]], [rr[0], 0.02, rr[1], tip[0], 0.02, tip[1]]);
+    const { obj, mat } = this.line(segs, { width: 1.4, order: 3 });
+    this.floors[0]?.group.add(obj);
+    this.compassTip = tip;
+    return mat;
+  }
+
+  private compassTip: Point = [0, 0];
+
+  /** The sun's disc, its path over the day, and the lines that tell its height and bearing. */
+  private buildSun() {
+    const group = new THREE.Group();
+    group.visible = false;
+    this.scene.add(group);
+    const radius = Math.hypot(this.b.x1 - this.b.x0, this.b.y1 - this.b.y0) / 2 + 14;
+    const make = (dashed: number, width: number) => {
+      const geo = new LineSegmentsGeometry();
+      geo.setPositions([0, 0, 0, 0, 0, 0]);
+      const mat = new LineMaterial({
+        linewidth: width,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        worldUnits: false,
+        dashed: true,
+        dashSize: dashed,
+        gapSize: dashed * 0.7,
+      });
+      const obj = new LineSegments2(geo, mat);
+      obj.renderOrder = 3;
+      obj.raycast = () => {};
+      this.lineMats.push(mat);
+      this.disposables.push(geo, mat);
+      group.add(obj);
+      return { obj, geo, mat };
+    };
+    const path = make(0.9, 1.6);
+    const drop = make(0.5, 1);
+    const discGeo = new THREE.SphereGeometry(1.1, 24, 16);
+    const glowGeo = new THREE.SphereGeometry(2.4, 24, 16);
+    const disc = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+    const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.28, depthWrite: false }));
+    disc.renderOrder = glow.renderOrder = 7;
+    disc.raycast = glow.raycast = () => {};
+    group.add(glow, disc);
+    this.disposables.push(discGeo, glowGeo, disc.material as THREE.Material, glow.material as THREE.Material);
+    return { group, path, drop, disc, glow, radius };
   }
 
   /** Overall dimensions, drawn on the ground floor like the quotes of a drawing. */
@@ -453,11 +655,15 @@ export class BuildingEngine {
     if (!this.focus.floor && this.layers.dims) {
       box.expandByPoint(this.world(this.b.x0 - 3.2, 0, this.b.y0 - 3.2, 0));
     }
+    if (!this.focus.floor && this.sun && this.sunRT) {
+      for (const p of this.sun.path) if (p.altitude > 0) box.expandByPoint(this.sunPoint(p));
+    }
     return box;
   }
 
   /** Frames the content; `preset` also turns the camera to the current view's direction. */
   private frame(animate: boolean, dur = 0.6, preset = false) {
+    this.dirty = true;
     const box = this.contentBox();
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getSize(new THREE.Vector3()).length() / 2;
@@ -487,6 +693,7 @@ export class BuildingEngine {
   }
 
   private resize() {
+    this.dirty = true;
     const { width, height } = this.host.getBoundingClientRect();
     const w = Math.max(1, width);
     const h = Math.max(1, height);
@@ -557,14 +764,20 @@ export class BuildingEngine {
     const pal = this.pal;
     if (!pal) return;
 
-    this.explodeNow = this.reduced ? this.explode : approach(this.explodeNow, this.explode, dt);
+    let busy = this.dirty || this.anim !== null;
+    const step = (cur: number, tgt: number, rate?: number) => {
+      const v = this.reduced ? tgt : approach(cur, tgt, dt, rate);
+      if (v !== cur) busy = true;
+      return v;
+    };
+    this.explodeNow = step(this.explodeNow, this.explode);
     const selUnit = this.focus.unit;
-    const hoverUnit = this.hoverRoom ? this.floors.flatMap((rt) => rt.tiles).find((t) => t.room.id === this.hoverRoom)?.room.unitId ?? null : null;
+    const hoverUnit = this.hoverRoom ? (this.floors.flatMap((rt) => rt.tiles).find((t) => t.room.id === this.hoverRoom)?.room.unitId ?? null) : null;
 
     for (const rt of this.floors) {
       const dimT = this.focus.floor && rt.f.id !== this.focus.floor ? 1 : 0;
-      rt.dim = this.reduced ? dimT : approach(rt.dim, dimT, dt, 7);
-      rt.lift = this.reduced ? this.targetLift(rt) : approach(rt.lift, this.targetLift(rt), dt, 7);
+      rt.dim = step(rt.dim, dimT, 7);
+      rt.lift = step(rt.lift, this.targetLift(rt), 7);
       rt.y = this.floorY(rt, this.explodeNow, rt.lift);
       rt.group.position.y = rt.y;
 
@@ -572,23 +785,28 @@ export class BuildingEngine {
       rt.fill.opacity = THREE.MathUtils.lerp(pal.fillAlpha, pal.dimAlpha, d);
       rt.depth.visible = d < 0.5;
       rt.edges.opacity = THREE.MathUtils.lerp(pal.dark ? 0.62 : 0.7, pal.dark ? 0.06 : 0.09, d);
-      rt.hidden.opacity = THREE.MathUtils.lerp(pal.dark ? 0.09 : 0.12, 0, d);
+      rt.hidden.opacity = THREE.MathUtils.lerp(pal.hiddenAlpha, 0, d);
       rt.details.opacity = THREE.MathUtils.lerp(0.75, 0.03, d);
       rt.railings.opacity = THREE.MathUtils.lerp(0.7, 0.03, d);
 
       for (const t of rt.tiles) {
         const hotT = t.room.id === this.hoverRoom ? 1 : 0;
         const emphT = t.room.unitId && t.room.unitId === selUnit ? 1 : 0;
-        t.hot = this.reduced ? hotT : approach(t.hot, hotT, dt, 14);
-        t.emph = this.reduced ? emphT : approach(t.emph, emphT, dt, 10);
+        t.hot = step(t.hot, hotT, 14);
+        t.emph = step(t.emph, emphT, 10);
         setRGB(t.mat.color, pal.group[t.room.group]);
         if (t.emph > 0.001) t.mat.color.lerp(this.signal, t.emph * 0.75);
         const base = pal.tileAlpha * (t.room.outdoor ? 0.7 : 1);
         t.mat.opacity = (base + t.hot * 0.22 + t.emph * 0.16) * (1 - 0.95 * d);
       }
+      for (const l of rt.lit) {
+        const o = this.sun ? 0.5 * facadeLight(l.bearing, this.sun.now) * (1 - 0.95 * d) : 0;
+        l.mat.opacity = o;
+        l.mesh.visible = o > 0.005;
+      }
       for (const [unitId, o] of rt.outlines) {
         const showT = unitId === selUnit ? 1 : unitId === hoverUnit ? 0.55 : 0;
-        o.show = this.reduced ? showT : approach(o.show, showT, dt, 12);
+        o.show = step(o.show, showT, 12);
         o.line.opacity = o.show;
         o.halo.opacity = pal.glow * 0.45 * o.show;
         o.line.visible = o.show > 0.01;
@@ -598,6 +816,7 @@ export class BuildingEngine {
     this.dims.group.visible = this.layers.dims;
     this.dims.line.opacity = 0.8 * (1 - (this.floors[0]?.dim ?? 0));
     this.context.opacity = 0.35 * (1 - (this.floors[0]?.dim ?? 0));
+    if (this.compass) this.compass.opacity = 0.75 * (1 - (this.floors[0]?.dim ?? 0));
 
     if (this.anim) {
       const a = this.anim;
@@ -612,7 +831,9 @@ export class BuildingEngine {
       this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(s));
       if (a.t >= 1) this.anim = null;
     }
-    this.controls.update();
+    if (this.controls.update()) busy = true;
+    if (!busy) return;
+    this.dirty = false;
     this.renderer.render(this.scene, this.camera);
     this.placeLabels();
   };
@@ -641,7 +862,7 @@ export class BuildingEngine {
     const roomById = new Map(this.floors.flatMap((rt) => rt.tiles.map((t) => [t.room.id, { rt, room: t.room }] as const)));
 
     // Floor leaders: a column on the right of the building, one label per floor, kept apart vertically.
-    const showLeaders = !narrow && this.explodeNow > 0.12 && !sel.unit;
+    const showLeaders = !narrow && this.explodeNow > 0.12 && !sel.unit && !this.sun;
     const anchors = this.floors.map((rt) => ({ rt, p: this.screen(this.world(this.b.x1 + 0.4, this.b.wallHeight * 0.5, this.cy, rt.y)) }));
     // Right of the building, but clear of the right-hand panel.
     const colX = Math.min(Math.max(...anchors.map((a) => a.p.x)) + 44, w - this.pads.r - 190);
@@ -714,7 +935,12 @@ export class BuildingEngine {
       const by = Math.min(...ys) - pad;
       this.els.target.style.width = `${Math.max(...xs) - bx + pad}px`;
       this.els.target.style.height = `${Math.max(...ys) - by + pad}px`;
-      this.place(this.els.target, pts.every((p) => p.ok), bx, by);
+      this.place(
+        this.els.target,
+        pts.every((p) => p.ok),
+        bx,
+        by,
+      );
     } else this.place(this.els.target, false);
 
     // Dimension figures and the street name, on the ground floor.
@@ -727,7 +953,16 @@ export class BuildingEngine {
       this.place(this.els.dims.get("w"), showDims && pw.ok, pw.x, pw.y);
       this.place(this.els.dims.get("d"), showDims && pd.ok, pd.x, pd.y);
       const ps = this.screen(this.world((x0 + x1) / 2, -0.3, y0 - 8, g.y));
-      this.place(this.els.street, g.dim < 0.5 && ps.ok, ps.x, ps.y);
+      this.place(this.els.street, g.dim < 0.5 && ps.ok && !this.sun, ps.x, ps.y);
+      if (this.compass) {
+        const pn = this.screen(this.world(this.compassTip[0], 0, this.compassTip[1], g.y));
+        this.place(this.els.north, g.dim < 0.5 && pn.ok, pn.x, pn.y);
+      }
     }
+
+    // The time, by the sun.
+    const sunUp = this.sun && this.sunRT && this.sun.now.altitude > 0;
+    const pSun = sunUp ? this.screen(this.sunRT!.disc.position) : null;
+    this.place(this.els.sun, !!pSun?.ok, pSun?.x, pSun?.y);
   }
 }

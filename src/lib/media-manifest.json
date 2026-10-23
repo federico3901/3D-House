@@ -1,0 +1,225 @@
+{
+ "/media/diario-impianti.jpg": {
+  "w": 1600,
+  "h": 1068,
+  "base": "/media/r/diario-impianti",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/diario-massetti.jpg": {
+  "w": 1600,
+  "h": 1067,
+  "base": "/media/r/diario-massetti",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/diario-pilastri.jpg": {
+  "w": 1600,
+  "h": 1165,
+  "base": "/media/r/diario-pilastri",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/diario-solaio.jpg": {
+  "w": 1600,
+  "h": 1060,
+  "base": "/media/r/diario-solaio",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/diario-squadra.jpg": {
+  "w": 1600,
+  "h": 1067,
+  "base": "/media/r/diario-squadra",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/diario-tramezze.jpg": {
+  "w": 1600,
+  "h": 1067,
+  "base": "/media/r/diario-tramezze",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/facciata-balconi.jpg": {
+  "w": 1800,
+  "h": 1200,
+  "base": "/media/r/facciata-balconi",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/fase1-facciata.jpg": {
+  "w": 1800,
+  "h": 1332,
+  "base": "/media/r/fase1-facciata",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/fase2-struttura.jpg": {
+  "w": 1800,
+  "h": 2184,
+  "base": "/media/r/fase2-struttura",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/hero-gru.jpg": {
+  "w": 2400,
+  "h": 1600,
+  "base": "/media/r/hero-gru",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   2400
+  ]
+ },
+ "/media/int-cucina.jpg": {
+  "w": 1800,
+  "h": 1196,
+  "base": "/media/r/int-cucina",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/int-living.jpg": {
+  "w": 1800,
+  "h": 1224,
+  "base": "/media/r/int-living",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/int-soggiorno-cucina.jpg": {
+  "w": 1800,
+  "h": 1200,
+  "base": "/media/r/int-soggiorno-cucina",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/int-soggiorno.jpg": {
+  "w": 1800,
+  "h": 1201,
+  "base": "/media/r/int-soggiorno",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600,
+   1800
+  ]
+ },
+ "/media/progetto-tavole.jpg": {
+  "w": 1600,
+  "h": 900,
+  "base": "/media/r/progetto-tavole",
+  "widths": [
+   480,
+   800,
+   1200,
+   1600
+  ]
+ },
+ "/media/pano/app-bagno.jpg": {
+  "w": 4096,
+  "h": 2048,
+  "base": "/media/r/pano-app-bagno",
+  "widths": [
+   1024,
+   2048,
+   4096
+  ]
+ },
+ "/media/pano/app-camera.jpg": {
+  "w": 4096,
+  "h": 2048,
+  "base": "/media/r/pano-app-camera",
+  "widths": [
+   1024,
+   2048,
+   4096
+  ]
+ },
+ "/media/pano/app-soggiorno.jpg": {
+  "w": 4096,
+  "h": 2048,
+  "base": "/media/r/pano-app-soggiorno",
+  "widths": [
+   1024,
+   2048,
+   4096
+  ]
+ },
+ "/media/pano/cantiere-openspace.jpg": {
+  "w": 4096,
+  "h": 2048,
+  "base": "/media/r/pano-cantiere-openspace",
+  "widths": [
+   1024,
+   2048,
+   4096
+  ]
+ },
+ "/media/pano/cantiere-soggiorno.jpg": {
+  "w": 4096,
+  "h": 2048,
+  "base": "/media/r/pano-cantiere-soggiorno",
+  "widths": [
+   1024,
+   2048,
+   4096
+  ]
+ }
+}

@@ -20,7 +20,7 @@
   /* overwritten from the tenant data by <BrandStyle> */
   --brand: #f2b200;
   --brand-ink: #141716;
-  --ok: #157a52;
+  --ok: #126a47;
   --ok-bg: #dcf0e4;
   --warn: #9a5800;
   --warn-bg: #fbe9c8;
@@ -90,6 +90,22 @@
 
   .on-night :focus-visible {
     outline-color: var(--night-ink);
+  }
+}
+
+/* Printing (the apartment sheet): white paper, A4, everything a little smaller. */
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  html {
+    font-size: 10.5px;
+  }
+  html,
+  body {
+    background: #fff !important;
   }
 }
 

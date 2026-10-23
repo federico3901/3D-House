@@ -20,6 +20,17 @@ export interface Brand {
   address: string;
   vat: string;
   foundedYear: number;
+  /** When visitors can book a visit; without it, the defaults of the booking form. */
+  visits?: VisitHours;
+}
+
+export interface VisitHours {
+  /** Weekdays with visits: 1 = Monday … 6 = Saturday. */
+  days: number[];
+  /** Start times, "HH:MM". On Saturday only the morning ones. */
+  slots: string[];
+  /** Length of a visit, in minutes. */
+  minutes: number;
 }
 
 export type ProjectStatus = "planning" | "construction" | "completed";
@@ -200,5 +211,7 @@ export interface BuildingPlan {
   storey: number;
   slab: number;
   street?: string;
+  /** Compass bearing the front façade (y = 0) faces, degrees clockwise from north: drives the sun and the exposure. */
+  facing?: number;
   floors: PlanFloor[];
 }

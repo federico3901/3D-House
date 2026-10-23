@@ -1,21 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { ContactSection, askAbout } from "@/components/home/ContactSection";
-import { TourPlayer } from "@/components/tour/TourPlayer";
+import { bookVisit } from "@/components/home/VisitBooking";
 import { AppLink } from "@/components/ui/AppLink";
 import { Icon } from "@/components/ui/Icon";
+import { LazyMount } from "@/components/ui/LazyMount";
 import { ProjectStatusChip } from "@/components/ui/Status";
 import { monthYear, tr } from "@/lib/format";
+import type { UnitSun } from "@/lib/exposure";
 import { useLocale } from "@/lib/locale";
 import { useProject, useTenant } from "@/lib/store";
+import { CostCalculator } from "./CostCalculator";
 import { Diary } from "./Diary";
 import { Gallery } from "./Gallery";
 import { Schedule } from "./Schedule";
 import { Units } from "./Units";
 
-/** A project page. `map` and `model` are server-rendered drawings: the neighbourhood, and the exploded floor plans. */
-export function ProjectView({ slug, map, model }: { slug: string; map?: React.ReactNode; model?: React.ReactNode }) {
+// three.js only loads when the tour comes near the screen.
+const TourPlayer = dynamic(() => import("@/components/tour/TourPlayer").then((m) => m.TourPlayer), { ssr: false, loading: () => <TourPoster /> });
+
+function TourPoster() {
+  return <div className="aspect-[4/3] max-h-[680px] w-full animate-pulse rounded-[var(--radius)] bg-night-2 sm:aspect-[16/9]" />;
+}
+
+/** A project page. `map` is the neighbourhood with its services, `model` the exploded floor plans (server-rendered),
+    `sun` each apartment's exposure. */
+export function ProjectView({ slug, map, model, sun }: { slug: string; map?: React.ReactNode; model?: React.ReactNode; sun?: Record<string, UnitSun> }) {
   const project = useProject(slug);
   const { brand } = useTenant();
   const { locale, t } = useLocale();
@@ -32,6 +44,7 @@ export function ProjectView({ slug, map, model }: { slug: string; map?: React.Re
     { id: "tour", label: t.project.tour, show: project.tours.length > 0 },
     { id: "edificio", label: t.project.modelShort, show: !!model },
     { id: "appartamenti", label: t.project.units, show: project.units.length > 0 },
+    { id: "costi", label: t.costs.nav, show: project.units.some((u) => u.status !== "sold") },
     { id: "posizione", label: t.project.location, show: true },
   ].filter((s) => s.show);
 
@@ -66,11 +79,11 @@ export function ProjectView({ slug, map, model }: { slug: string; map?: React.Re
                 {t.project.modelShort}
               </AppLink>
             )}
-            <button
-              type="button"
-              className="btn btn-line"
-              onClick={() => askAbout(project.slug, "")}
-            >
+            <button type="button" className="btn btn-line" onClick={() => bookVisit(project.slug)}>
+              <Icon name="calendar" />
+              {t.visit.book}
+            </button>
+            <button type="button" className="btn btn-line" onClick={() => askAbout(project.slug, "")}>
               {t.nav.requestInfo}
             </button>
           </div>
@@ -189,31 +202,40 @@ export function ProjectView({ slug, map, model }: { slug: string; map?: React.Re
                 </AppLink>
               </div>
             </div>
-            <TourPlayer key={tour.id} tour={tour} fullscreenHref={`/${locale}/projects/${project.slug}/tour/`} />
+            <LazyMount placeholder={<TourPoster />}>
+              <TourPlayer key={tour.id} tour={tour} fullscreenHref={`/${locale}/projects/${project.slug}/tour/`} />
+            </LazyMount>
           </div>
         </section>
       )}
 
       {model && (
-        <section id="edificio" className="on-night scroll-mt-32 border-t border-night-line bg-[#000] text-night-ink">
-          <div
-            className="wrap grid items-center gap-10 py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
-              backgroundSize: "48px 48px",
-            }}
-          >
+        <section
+          id="edificio"
+          className="scroll-mt-32 border-t border-line"
+          style={{
+            backgroundImage: "linear-gradient(rgba(18,21,20,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(18,21,20,0.06) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="wrap grid items-center gap-10 py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
             <div className="grid content-start gap-5">
-              <p className="label text-[#53e2cf]">{t.project.modelPlan}</p>
+              <p className="label text-mute">{t.project.modelPlan}</p>
               <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.project.model}</h2>
-              <p className="max-w-[56ch] text-night-mute">{t.project.modelLead}</p>
-              <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="btn w-fit bg-[#53e2cf] text-black hover:bg-[#7cebdc]">
+              <p className="lead">{t.project.modelLead}</p>
+              <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="btn btn-ink w-fit">
                 <Icon name="cube" />
                 {t.project.modelOpen}
               </AppLink>
             </div>
-            <AppLink href={`/${locale}/projects/${project.slug}/3d/`} className="block max-h-[620px] overflow-hidden" aria-label={t.project.modelOpen}>
+            <AppLink
+              href={`/${locale}/projects/${project.slug}/3d/`}
+              className="block max-h-[620px] overflow-hidden"
+              // The button beside it is the link for keyboards and screen readers; this is the picture's shortcut.
+              tabIndex={-1}
+              aria-hidden="true"
+            >
               {model}
             </AppLink>
           </div>
@@ -224,37 +246,53 @@ export function ProjectView({ slug, map, model }: { slug: string; map?: React.Re
         <section id="appartamenti" className="scroll-mt-32">
           <div className="wrap grid gap-8 py-14">
             <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.project.units}</h2>
-            <Units project={project} />
+            <Units project={project} sun={sun} />
+          </div>
+        </section>
+      )}
+
+      {project.units.some((u) => u.status !== "sold") && (
+        <section id="costi" className="scroll-mt-32 border-t border-line bg-board-2">
+          <div className="wrap grid gap-8 py-14">
+            <div className="grid gap-3">
+              <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.costs.title}</h2>
+              <p className="lead">{t.costs.lead}</p>
+            </div>
+            <CostCalculator project={project} />
           </div>
         </section>
       )}
 
       <section id="posizione" className="scroll-mt-32 border-t border-line bg-board-2">
-        <div className="wrap grid gap-8 py-14 lg:grid-cols-[1fr_2fr] lg:gap-12">
-          <div className="grid content-start gap-4">
-            <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.project.location}</h2>
-            <p className="text-[1.05rem]">
-              {location.address}
-              <br />
-              {location.district}, {location.city}
-            </p>
-            {location.approximate && <p className="text-[0.9rem] text-mute">{t.project.approximate}</p>}
+        <div className="wrap grid gap-8 py-14">
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
+            <div className="grid gap-3">
+              <h2 className="display text-[clamp(1.9rem,3.6vw,2.8rem)]">{t.project.location}</h2>
+              <p className="text-[1.05rem]">
+                {location.address}, {location.district}, {location.city}
+                {location.approximate && <span className="text-[0.9rem] text-mute"> · {t.project.approximate}</span>}
+              </p>
+              {map && <p className="lead">{t.area.lead}</p>}
+            </div>
             <a href={osm} target="_blank" rel="noreferrer" className="btn btn-line w-fit">
               <Icon name="external" size={18} />
               {t.project.openMap}
             </a>
+          </div>
 
-            <div className="mt-6 grid gap-2 border-t border-line pt-6 text-[0.88rem] text-mute">
-              <h3 className="label text-ink-2">{t.project.sources}</h3>
-              {project.note && <p>{tr(project.note, locale)}</p>}
+          {map}
+
+          <div className="grid gap-2 border-t border-line pt-6 text-[0.88rem] text-mute">
+            <h3 className="label text-ink-2">{t.project.sources}</h3>
+            {project.note && <p className="max-w-[80ch]">{tr(project.note, locale)}</p>}
+            <p className="flex flex-wrap gap-x-5 gap-y-1">
               {project.sources.map((s) => (
                 <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="w-fit text-ink underline underline-offset-4 hover:text-ink-2">
                   {s.label}
                 </a>
               ))}
-            </div>
+            </p>
           </div>
-          <div className="min-w-0">{map}</div>
         </div>
       </section>
 

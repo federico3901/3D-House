@@ -18,6 +18,7 @@ import {
 import { Icon } from "@/components/ui/Icon";
 import { tr } from "@/lib/format";
 import { useLocale } from "@/lib/locale";
+import manifest from "@/lib/media-manifest.json";
 import { asset } from "@/lib/paths";
 import type { PanoramaScene } from "@/lib/types";
 
@@ -26,6 +27,18 @@ import type { PanoramaScene } from "@/lib/types";
    coordinates and can be read straight off the photo. */
 
 const FOV = { min: 32, max: 90, start: 75 };
+
+const media = manifest as Record<string, { base: string; widths: number[] }>;
+
+/** The files of a panorama: a light AVIF to show at once, the sharp one for this screen, and the original JPEG. */
+function panoramaFiles(image: string, maxTexture: number) {
+  const m = media[image];
+  if (!m) return { preview: null, full: asset(image), fallback: asset(image) };
+  const limit = Math.min(maxTexture, window.innerWidth < 900 ? 2048 : 4096);
+  const full = Math.max(...m.widths.filter((w) => w <= limit));
+  const small = Math.min(...m.widths);
+  return { preview: small < full ? asset(`${m.base}-${small}.avif`) : null, full: asset(`${m.base}-${full}.avif`), fallback: asset(image) };
+}
 
 function direction(lon: number, lat: number, out = new Vector3()) {
   const phi = MathUtils.degToRad(90 - lat);
@@ -77,6 +90,8 @@ export function PanoramaViewer({
   const [loading, setLoading] = useState(true);
   const [fading, setFading] = useState(false);
   const [touched, setTouched] = useState(false);
+  /** The panorama is only downloaded once the viewer comes near the screen. */
+  const [near, setNear] = useState(false);
 
   useEffect(() => {
     autoRotateRef.current = autoRotate;
@@ -192,24 +207,30 @@ export function PanoramaViewer({
       };
     }
 
-    // Draw only while on screen.
+    // Draw only while on screen; start downloading a little before it gets there.
     let visible = true;
     const io = new IntersectionObserver(([entry]) => (visible = entry.isIntersecting));
     io.observe(box);
+    const nearIO = new IntersectionObserver(([entry]) => entry.isIntersecting && setNear(true), { rootMargin: "400px" });
+    nearIO.observe(box);
 
     const target = new Vector3();
     const spot = new Vector3();
     const look = new Vector3();
     let raf = 0;
     let last = performance.now();
+    // Last view drawn: a frame is only drawn when the view changed, so a still panorama costs nothing.
+    const drawn = { lon: NaN, lat: NaN, fov: NaN };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(now - last, 100);
       last = now;
       if (!visible && !dirty.current) return;
-      dirty.current = false;
       if (autoRotateRef.current && !drag && !pinch && !onHotspot.current && now - v.lastInput > 2500) v.lon += dt * 0.006;
-      camera.fov += (v.fov - camera.fov) * 0.2;
+      camera.fov = Math.abs(v.fov - camera.fov) < 0.02 ? v.fov : camera.fov + (v.fov - camera.fov) * 0.2;
+      if (!dirty.current && drawn.lon === v.lon && drawn.lat === v.lat && drawn.fov === camera.fov) return;
+      dirty.current = false;
+      Object.assign(drawn, { lon: v.lon, lat: v.lat, fov: camera.fov });
       camera.updateProjectionMatrix();
       direction(v.lon, v.lat, target);
       camera.lookAt(target);
@@ -236,6 +257,7 @@ export function PanoramaViewer({
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      nearIO.disconnect();
       box.removeEventListener("pointerdown", onDown);
       box.removeEventListener("pointermove", onMove);
       box.removeEventListener("pointerup", onUp);
@@ -251,50 +273,62 @@ export function PanoramaViewer({
     };
   }, [handleRef]);
 
-  // Load the scene's panorama (cached), fade across, and point the camera at the scene's start view.
+  // Load the scene's panorama (cached), fade across, and point the camera at the scene's start view. A light preview
+  // shows first; the sharp file replaces it when it arrives. Browsers without AVIF get the original JPEG.
   useEffect(() => {
     const g = gl.current;
-    if (!g) return;
+    if (!g || !near) return;
     let cancelled = false;
     hotspotsRef.current = [];
-    const show = (tex: Texture) => {
+    const prepare = (tex: Texture) => {
+      tex.colorSpace = SRGBColorSpace;
+      tex.minFilter = LinearFilter;
+      tex.generateMipmaps = false;
+      tex.anisotropy = g.renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+    const load = (url: string) => new Promise<Texture>((resolve, reject) => g.loader.load(url, (tex) => resolve(prepare(tex)), undefined, reject));
+    const apply = (tex: Texture, first: boolean) => {
       if (cancelled) return;
       g.material.map = tex;
       g.material.needsUpdate = true;
+      dirty.current = true;
+      if (!first) return;
       view.current.lon = scene.startX * 360;
       view.current.lat = 0;
       hotspotsRef.current = scene.hotspots;
-      dirty.current = true;
       setLoading(false);
       requestAnimationFrame(() => !cancelled && setFading(false));
     };
     setFading(true);
     const cached = g.textures.get(scene.image);
     if (cached) {
-      const id = window.setTimeout(() => show(cached), 180);
+      const id = window.setTimeout(() => apply(cached, true), 180);
       return () => {
         cancelled = true;
         window.clearTimeout(id);
       };
     }
     setLoading(true);
-    g.loader.load(
-      asset(scene.image),
-      (tex) => {
-        tex.colorSpace = SRGBColorSpace;
-        tex.minFilter = LinearFilter;
-        tex.generateMipmaps = false;
-        tex.anisotropy = g.renderer.capabilities.getMaxAnisotropy();
-        g.textures.set(scene.image, tex);
-        show(tex);
-      },
-      undefined,
-      () => !cancelled && setLoading(false),
-    );
+    const files = panoramaFiles(scene.image, g.renderer.capabilities.maxTextureSize);
+    (async () => {
+      let preview: Texture | null = null;
+      if (files.preview) {
+        preview = await load(files.preview).catch(() => null);
+        if (preview) apply(preview, true);
+      }
+      const full = await load(files.full).catch(() => load(files.fallback).catch(() => null));
+      if (cancelled) return full?.dispose();
+      if (full) {
+        g.textures.set(scene.image, full);
+        apply(full, !preview);
+      } else if (!preview) setLoading(false);
+      preview?.dispose();
+    })();
     return () => {
       cancelled = true;
     };
-  }, [scene]);
+  }, [scene, near]);
 
   if (unsupported) {
     return (

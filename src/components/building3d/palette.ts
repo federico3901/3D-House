@@ -1,6 +1,6 @@
 import { GROUPS, type RoomGroup } from "./plan";
 
-/* The --o-* and --k-* tokens of the viewer's current theme (building3d.css), parsed for WebGL. */
+/* The --o-* and --k-* tokens of the viewer (building3d.css), parsed for WebGL. */
 
 export interface RGBA {
   r: number;
@@ -12,14 +12,19 @@ export interface RGBA {
 export interface Palette {
   dark: boolean;
   edge: RGBA;
+  /** The brand colour: the glow around the selected apartment, and the tint of its rooms. */
   signal: RGBA;
+  /** The outline of the selected apartment. */
+  select: RGBA;
   ink: RGBA;
   mute: RGBA;
   group: Record<RoomGroup, RGBA>;
   fillAlpha: number;
   tileAlpha: number;
   dimAlpha: number;
-  /** 0..1 strength of coloured glows (0 in «Gesso»: no glows on paper). */
+  /** Edges hidden behind surfaces, drawn dashed. */
+  hiddenAlpha: number;
+  /** Strength of the glow around the selected apartment. */
   glow: number;
 }
 
@@ -57,13 +62,15 @@ export function readPalette(el: HTMLElement): Palette {
   return {
     dark,
     edge: parseColor(v("--o-edge"), { r: 1, g: 1, b: 1, a: 0.6 }),
-    signal: parseColor(v("--signal"), { r: 0.33, g: 0.89, b: 0.81, a: 1 }),
+    signal: parseColor(v("--signal"), { r: 0.95, g: 0.7, b: 0, a: 1 }),
+    select: parseColor(v("--o-select"), { r: 0.07, g: 0.08, b: 0.08, a: 1 }),
     ink: parseColor(v("--ink"), { r: 0.9, g: 0.9, b: 0.9, a: 1 }),
     mute: parseColor(v("--mute"), GREY),
     group,
     fillAlpha: num("--o-fill-alpha", 0.12),
     tileAlpha: num("--o-tile-alpha", 0.2),
     dimAlpha: num("--o-dim-alpha", 0.04),
+    hiddenAlpha: num("--o-hidden-alpha", 0.12),
     glow: num("--o-glow", 0.45),
   };
 }

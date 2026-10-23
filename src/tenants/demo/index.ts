@@ -11,8 +11,8 @@ const SOURCE = {
 };
 
 const NOTE = {
-  it: "Progetto reale usato come esempio. Indirizzo, numero di appartamenti, tagli, impianti e consegna della fase 2 vengono da fonti pubbliche; impresa, avanzamento, unità, piantina e modello 3D, date della fase 1, foto e tour 360° sono illustrativi.",
-  en: "A real project used as an example. Address, number of apartments, layouts, building services and the phase 2 handover come from public sources; the builder, progress, units, floor plan and 3D model, phase 1 dates, photos and 360° tours are illustrative.",
+  it: "Progetto reale usato come esempio. Indirizzo, numero di appartamenti, tagli, impianti e consegna della fase 2 vengono da fonti pubbliche; impresa, avanzamento, unità e prezzi, piantina e modello 3D, esposizione, date della fase 1, foto e tour 360° sono illustrativi.",
+  en: "A real project used as an example. Address, number of apartments, layouts, building services and the phase 2 handover come from public sources; the builder, progress, units and prices, floor plan and 3D model, orientation, phase 1 dates, photos and 360° tours are illustrative.",
 };
 
 const LOCATION = {
@@ -44,7 +44,7 @@ const FEATURES = [
 ];
 
 const demo: TenantData = {
-  version: 2,
+  version: 3,
   id: "demo",
   brand: {
     name: "Demo Costruzioni",
@@ -60,6 +60,7 @@ const demo: TenantData = {
     address: "Via Esempio 1, 20158 Milano",
     vat: "P.IVA 00000000000",
     foundedYear: 2004,
+    visits: { days: [1, 2, 3, 4, 5, 6], slots: ["09:30", "11:00", "14:30", "16:00", "17:30"], minutes: 60 },
   },
   notice: {
     it: "Sito dimostrativo: l'impresa è fittizia, il progetto Grazioli 57 è reale. Avanzamento, unità e immagini sono illustrativi.",
@@ -226,9 +227,9 @@ const demo: TenantData = {
       ],
       units: [
         { id: "A1", name: "A1", floor: 0, rooms: 2, bathrooms: 1, area: 52, status: "sold", price: null },
-        { id: "A2", name: "A2", floor: 0, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "garden", area: 59 }, status: "reserved", price: null },
-        { id: "A3", name: "A3", floor: 0, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "garden", area: 35 }, status: "available", price: null },
-        { id: "B1", name: "B1", floor: 1, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "balcony", area: 10 }, status: "available", price: null },
+        { id: "A2", name: "A2", floor: 0, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "garden", area: 59 }, status: "reserved", price: 489000 },
+        { id: "A3", name: "A3", floor: 0, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "garden", area: 35 }, status: "available", price: 279000 },
+        { id: "B1", name: "B1", floor: 1, rooms: 3, bathrooms: 2, area: 99, outdoor: { kind: "balcony", area: 10 }, status: "available", price: 468000 },
         { id: "B2", name: "B2", floor: 1, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "sold", price: null },
         { id: "B3", name: "B3", floor: 1, rooms: 2, bathrooms: 1, area: 52, outdoor: { kind: "balcony", area: 6 }, status: "available", price: null },
       ],

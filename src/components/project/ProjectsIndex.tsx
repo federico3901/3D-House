@@ -67,7 +67,12 @@ function ProjectCard({ project }: { project: Project }) {
       className="group grid overflow-hidden rounded-[var(--radius)] border border-line bg-board transition hover:border-ink"
     >
       <div className="relative overflow-hidden bg-night">
-        <Img src={project.cover.src} alt={tr(project.cover.alt, locale)} className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.03]" />
+        <Img
+          src={project.cover.src}
+          alt={tr(project.cover.alt, locale)}
+          sizes="(min-width: 768px) 50vw, 100vw"
+          className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.03]"
+        />
         <span className="absolute left-4 top-4">
           <ProjectStatusChip status={project.status} />
         </span>

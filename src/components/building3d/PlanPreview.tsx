@@ -3,16 +3,17 @@ import { prepareBuilding, type RoomGroup } from "./plan";
 import { strings3d } from "./strings";
 
 /* An exploded axonometric of the floor plans, drawn on the server as SVG: the preview of the 3D view on the project
-   page, in its colours (Silhouette). Floors are painted bottom to top, each hiding what lies under it. */
+   page, in its colours (the --k-* tokens of building3d.css). Floors are painted bottom to top, each hiding what lies
+   under it. */
 
 const GROUP_COLOR: Record<RoomGroup, string> = {
-  day: "#ffb547",
-  night: "#9fb6ff",
-  bath: "#4fb8ff",
-  serv: "#d9cdb4",
-  dist: "#9a9a9a",
-  out: "#5fd38d",
-  plant: "#e8d25a",
+  day: "#a8521f",
+  night: "#3a4fb0",
+  bath: "#17708f",
+  serv: "#6e5d3f",
+  dist: "#5f6864",
+  out: "#2b6e37",
+  plant: "#66601a",
 };
 
 const COS = Math.cos(Math.PI / 6);
@@ -48,27 +49,27 @@ export function PlanPreview({ plan, locale, title }: { plan: BuildingPlan; local
         return (
           <g key={f.id}>
             {/* slab edge, then the floor itself */}
-            <path d={path(corners, z - plan.slab)} fill="#050606" stroke="rgba(255,255,255,0.18)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <path d={path(corners, z)} fill="#0b0e0d" stroke="none" />
+            <path d={path(corners, z - plan.slab)} fill="#d5dad6" stroke="rgba(18,21,20,0.35)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <path d={path(corners, z)} fill="#ffffff" stroke="none" />
             {f.rooms.map((r) => (
               <path
                 key={r.id}
                 d={path(r.poly, z)}
                 fill={GROUP_COLOR[r.group]}
-                fillOpacity={r.outdoor ? 0.14 : 0.2}
-                stroke="rgba(255,255,255,0.42)"
+                fillOpacity={r.outdoor ? 0.12 : 0.18}
+                stroke="rgba(18,21,20,0.5)"
                 strokeWidth={0.8}
                 vectorEffect="non-scaling-stroke"
               />
             ))}
-            <path d={path(corners, z)} fill="none" stroke="#53e2cf" strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+            <path d={path(corners, z)} fill="none" stroke="#121514" strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
             {next &&
               corners.map(([x, y]) => {
                 const [ax, ay] = proj(x, y, z);
                 const [bx, by] = proj(x, y, next.level * step - plan.slab);
-                return <line key={`${x}-${y}`} x1={ax} y1={ay} x2={bx} y2={by} stroke="rgba(83,226,207,0.35)" strokeWidth={0.8} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />;
+                return <line key={`${x}-${y}`} x1={ax} y1={ay} x2={bx} y2={by} stroke="rgba(18,21,20,0.3)" strokeWidth={0.8} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />;
               })}
-            <text x={label[0] + 1.2} y={label[1] + 0.45} fontSize={1.3} fill="#e6e6e6" fontFamily="ui-monospace, Menlo, monospace" letterSpacing={0.12}>
+            <text x={label[0] + 1.2} y={label[1] + 0.45} fontSize={1.3} fill="#39403d" fontFamily="ui-monospace, Menlo, monospace" letterSpacing={0.12}>
               {s.code(f.level, f.roof)} · {(f.name as L10n)[locale].toUpperCase()}
             </text>
           </g>

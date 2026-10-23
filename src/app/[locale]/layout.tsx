@@ -5,6 +5,7 @@ import { BrandStyle } from "@/components/layout/BrandStyle";
 import { tr } from "@/lib/format";
 import { LocaleProvider } from "@/lib/locale";
 import { hasLocale } from "@/lib/locales";
+import { SITE_URL } from "@/lib/seo";
 import { LOCALES } from "@/lib/types";
 import { baseTenant } from "@/tenants";
 import "../globals.css";
@@ -24,10 +25,12 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
   const lang = hasLocale(locale) ? locale : "it";
   const { brand } = baseTenant;
   return {
+    metadataBase: new URL(SITE_URL),
     title: { default: brand.name, template: `%s · ${brand.name}` },
     description: tr(brand.tagline, lang),
-    alternates: { languages: Object.fromEntries(LOCALES.map((l) => [l, `/${l}/`])) },
     icons: { icon: "/icon.svg" },
+    openGraph: { siteName: brand.name, type: "website", locale: lang === "it" ? "it_IT" : "en_GB", images: ["/media/hero-gru.jpg"] },
+    twitter: { card: "summary_large_image" },
   };
 }
 

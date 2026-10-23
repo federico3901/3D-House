@@ -238,5 +238,7 @@ export const grazioli57: BuildingPlan = {
   storey: 3,
   slab: 0.3,
   street: "Via Don Bartolomeo Grazioli",
+  // The street runs east-north-east here; the front is drawn facing it, to the north (illustrative, like the plan).
+  facing: 352,
   floors,
 };

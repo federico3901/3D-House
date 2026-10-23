@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { TourPage } from "@/components/tour/TourPage";
 import { dictionaries } from "@/i18n/dictionaries";
 import { hasLocale } from "@/lib/locales";
+import { alternates } from "@/lib/seo";
 import { LOCALES } from "@/lib/types";
 import { baseTenant } from "@/tenants";
 
@@ -17,7 +18,10 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/projects
   const { locale, slug } = await params;
   const project = baseTenant.projects.find((p) => p.slug === slug);
   const t = dictionaries[hasLocale(locale) ? locale : "it"];
-  return { title: project ? `${t.project.tour} · ${project.name}` : t.project.tour };
+  return {
+    title: project ? `${t.project.tour} · ${project.name}` : t.project.tour,
+    alternates: alternates(hasLocale(locale) ? locale : "it", `/projects/${slug}/tour/`),
+  };
 }
 
 export default async function TourRoute({ params }: PageProps<"/[locale]/projects/[slug]/tour">) {

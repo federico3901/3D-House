@@ -217,7 +217,7 @@ type Zone = { unit: string; room: Room | null; outside: boolean };
 function prepareFloor(f: PlanFloor, plan: BuildingPlan, wallHeight: number): Floor {
   const rooms: Room[] = [
     ...f.units.flatMap((u) => u.rooms.map((r) => room(r, u.unitId))),
-    ...f.common.map((r) => room(r, null)),
+    ...f.common.map((r) => room(r, null, f.id)),
   ];
   const indoor = rooms.filter((r) => !r.outdoor);
 
@@ -351,9 +351,10 @@ function prepareFloor(f: PlanFloor, plan: BuildingPlan, wallHeight: number): Flo
   };
 }
 
-function room(r: PlanRoom, unitId: string | null): Room {
+/** A room: an apartment's keeps its id, a common one (the same stairs on every floor) gets its floor's. */
+function room(r: PlanRoom, unitId: string | null, floorId?: string): Room {
   return {
-    id: unitId ? r.id : `common-${r.id}`,
+    id: unitId ? r.id : `common-${floorId}-${r.id}`,
     kind: r.kind,
     group: GROUP_OF[r.kind],
     unitId,
@@ -437,4 +438,43 @@ export function prepareBuilding(plan: BuildingPlan): Building {
   const [x0, y0, x1, y1] = bbox([plan.footprint]);
   const wallHeight = plan.storey - plan.slab;
   return { plan, x0, x1, y0, y1, wallHeight, floors: [...plan.floors].sort((a, b) => a.level - b.level).map((f) => prepareFloor(f, plan, wallHeight)) };
+}
+
+/* ---------------------------------------------------------------- façades */
+
+export interface Facade {
+  a: Point;
+  b: Point;
+  /** Outward unit normal, in plan coordinates. */
+  normal: [number, number];
+}
+
+/** The outside walls: the footprint's edges, each with the way it faces. */
+export function facades(plan: BuildingPlan): Facade[] {
+  const fp = plan.footprint;
+  return fp.map((a, i) => {
+    const b = fp[(i + 1) % fp.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    let normal: [number, number] = [(b[1] - a[1]) / len, -(b[0] - a[0]) / len];
+    const mid: Point = [(a[0] + b[0]) / 2 + normal[0] * 0.1, (a[1] + b[1]) / 2 + normal[1] * 0.1];
+    if (inside(mid, fp)) normal = [-normal[0], -normal[1]];
+    return { a, b, normal };
+  });
+}
+
+/** The façades an apartment has windows or French windows on, on any of its floors. */
+export function unitFacades(plan: BuildingPlan, unitId: string): Facade[] {
+  const all = facades(plan);
+  const found = new Set<Facade>();
+  for (const f of plan.floors) {
+    const rooms = f.units.find((u) => u.unitId === unitId)?.rooms.filter((r) => !OUTDOOR.has(r.kind)) ?? [];
+    if (!rooms.length) continue;
+    for (const o of f.openings) {
+      if (o.kind !== "window" && o.kind !== "french") continue;
+      if (!rooms.some((r) => edgeDistance(o.at, r.poly) < 0.25)) continue;
+      const on = all.find((fc) => edgeDistance(o.at, [fc.a, fc.b]) < 0.25);
+      if (on) found.add(on);
+    }
+  }
+  return all.filter((fc) => found.has(fc));
 }

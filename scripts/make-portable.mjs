@@ -21,7 +21,7 @@ if (!existsSync(src)) throw new Error("out/ is missing: run `PORTABLE=1 next bui
 rmSync(dst, { recursive: true, force: true });
 // Left out: RSC payloads, the 404 pages, and the root language gate (start.html replaces it).
 const skip = (p) =>
-  p.endsWith(".txt") || p.endsWith(`${sep}404`) || p.endsWith("404.html") || p.includes(`${sep}_not-found`) || p === join(src, "index.html");
+  p.endsWith(".txt") || p.endsWith("sitemap.xml") || p.endsWith(`${sep}404`) || p.endsWith("404.html") || p.includes(`${sep}_not-found`) || p === join(src, "index.html");
 cpSync(src, dst, { recursive: true, filter: (p) => !skip(p) });
 // Some hosts reserve top-level names starting with "_": the build files move to assets/_next/. Next finds its asset
 // prefix by looking for "/_next/" in its own script URL, so that segment stays.

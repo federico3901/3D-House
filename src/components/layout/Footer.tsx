@@ -10,7 +10,7 @@ export function Footer() {
   const { brand, projects } = useTenant();
   const { locale, t } = useLocale();
   return (
-    <footer className="on-night bg-night text-night-ink">
+    <footer className="on-night bg-night text-night-ink print:hidden">
       <div className="wrap grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
         <div className="grid content-start gap-4">
           <Logo onNight />

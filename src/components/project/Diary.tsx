@@ -24,13 +24,20 @@ export function Diary({ project }: { project: Project }) {
               <time dateTime={u.date} className="num text-[0.95rem] font-semibold" title={longDate(u.date, locale)}>
                 {shortDate(u.date)}
               </time>
-              {u.phaseId && <span className="label rounded-[3px] border border-line-strong px-1.5 py-0.5 text-[0.62rem] text-ink-2">{phaseName(u.phaseId)}</span>}
+              {u.phaseId && (
+                <span className="label rounded-[3px] border border-line-strong px-1.5 py-0.5 text-[0.62rem] text-ink-2">{phaseName(u.phaseId)}</span>
+              )}
             </p>
             <h3 className="heading text-xl">{tr(u.title, locale)}</h3>
             <p className="max-w-[60ch] text-ink-2">{tr(u.body, locale)}</p>
           </div>
           {u.image && (
-            <Img src={u.image} alt={tr(u.title, locale)} className="aspect-[3/2] w-full rounded-[var(--radius)] object-cover" />
+            <Img
+              src={u.image}
+              alt={tr(u.title, locale)}
+              sizes="(min-width: 768px) 288px, 100vw"
+              className="aspect-[3/2] w-full rounded-[var(--radius)] object-cover"
+            />
           )}
         </li>
       ))}

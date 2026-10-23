@@ -55,6 +55,7 @@ export function HomeView() {
               src="/media/hero-gru.jpg"
               alt=""
               priority
+              sizes="(min-width: 1024px) 46vw, 100vw"
               className="aspect-[4/3] w-full object-cover lg:aspect-[5/6]"
             />
           </div>
@@ -184,6 +185,7 @@ function ConstructionFeature({ project }: { project: Project }) {
         <Img
           src={project.cover.src}
           alt={tr(project.cover.alt, locale)}
+          sizes="(min-width: 1024px) 52vw, 100vw"
           className="aspect-[4/3] w-full object-cover transition duration-700 group-hover:scale-[1.03] lg:absolute lg:inset-0 lg:aspect-auto lg:h-full"
         />
         <span className="absolute left-4 top-4">
@@ -284,7 +286,7 @@ function CompletedFeature({ project }: { project: Project }) {
         </div>
       </div>
       <AppLink href={`/${locale}/projects/${project.slug}/tour/`} className="group relative block overflow-hidden rounded-[var(--radius)] bg-night lg:order-1">
-        <Img src={project.gallery[0]?.src ?? project.cover.src} alt={tr(project.gallery[0]?.alt ?? project.cover.alt, locale)} className="aspect-[4/3] w-full object-cover transition duration-700 group-hover:scale-[1.03]" />
+        <Img src={project.gallery[0]?.src ?? project.cover.src} alt={tr(project.gallery[0]?.alt ?? project.cover.alt, locale)} sizes="(min-width: 1024px) 46vw, 100vw" className="aspect-[4/3] w-full object-cover transition duration-700 group-hover:scale-[1.03]" />
         <span className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
         <span className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3 text-white">
           <span className="flex -space-x-2">

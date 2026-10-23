@@ -53,9 +53,9 @@ export function Header() {
   );
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-board/90 backdrop-blur-md" style={{ top: "env(safe-area-inset-top, 0px)" }}>
+    <header className="sticky top-0 z-40 border-b border-line bg-board/90 backdrop-blur-md print:hidden" style={{ top: "env(safe-area-inset-top, 0px)" }}>
       <div className="wrap flex h-16 items-center justify-between gap-4">
-        <AppLink href={`/${locale}/`} className="shrink-0" aria-label={t.nav.projects}>
+        <AppLink href={`/${locale}/`} className="shrink-0">
           <Logo />
         </AppLink>
 

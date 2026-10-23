@@ -10,10 +10,18 @@ La demo usa un'impresa fittizia (**Demo Costruzioni**) e un progetto reale nel m
 | --- | --- |
 | Home `/it/`, `/en/` | Hero con il cantiere "dal vivo" (avanzamento, fase in corso, ultimo aggiornamento), cantieri in corso, case realizzate, contatti |
 | Progetti `/it/projects/` | Elenco filtrabile per stato |
-| Progetto `/it/projects/<slug>/` | Galleria foto, cartello di cantiere, scheda, cronoprogramma (Gantt) con la linea di oggi, diario di cantiere, tour 360°, tabella appartamenti con disponibilità, mappa della zona, fonti, modulo contatti precompilato |
-| Edificio 3D `/it/projects/<slug>/3d/` | Modello 3D generato dalla piantina, nello stile dell'«Atlante delle Forniture» (console scura Silhouette o chiara Gesso). I piani si separano con lo slider dell'esploso; un piano scelto si isola, un appartamento scelto mostra contorno, stanze con superfici, disponibilità e "Chiedi info". Viste 3/4, pianta e fronte, quote, nomi delle stanze, nastro della disponibilità. `…/3d/#B1` apre direttamente un appartamento |
+| Progetto `/it/projects/<slug>/` | Galleria foto, cartello di cantiere, scheda, cronoprogramma (Gantt) con la linea di oggi, diario di cantiere, tour 360°, tabella appartamenti con disponibilità, prezzo ed esposizione, calcolatore di costi d'acquisto e mutuo, servizi a piedi sulla mappa della zona, fonti, contatti e prenotazione delle visite |
+| Appartamento `/it/projects/<slug>/units/<id>/` | Scheda stampabile su un foglio A4: pianta quotata con nord e scala, stanze con superfici, esposizione e ore di sole, imposte e spese stimate, servizi vicini, caratteristiche e contatti |
+| Edificio 3D `/it/projects/<slug>/3d/` | Modello 3D generato dalla piantina, con l'intestazione e lo stile del sito. I piani si separano con lo slider dell'esploso; un piano scelto si isola, un appartamento scelto mostra contorno, stanze con superfici, prezzo, esposizione, "Chiedi info" e la sua scheda. Viste 3/4, pianta e fronte, quote, nomi delle stanze, freccia del nord e modalità **Sole**: percorso del sole nel giorno scelto (21 dicembre, 21 marzo, 21 giugno), ora per ora, con le facciate illuminate. `…/3d/#B1` apre direttamente un appartamento |
 | Tour `/it/projects/<slug>/tour/` | Tour 360° a schermo intero: trascinamento, zoom (rotella, pizzico, tastiera), rotazione automatica, punti cliccabili tra gli ambienti |
 | Area impresa `/it/admin/` | L'impresa aggiorna l'avanzamento delle fasi, pubblica voci di diario con foto, cambia lo stato degli appartamenti, le date e lo stato del progetto, aggiunge tour esterni (Matterport, Kuula…) e personalizza il brand (nome, sigla, colore, slogan, contatti). Le modifiche compaiono subito sul sito, anche nelle altre schede aperte |
+
+Per chi compra:
+
+- **Costi e mutuo**: per l'appartamento scelto, IVA (4% prima casa, 10% altrimenti), imposte fisse di registro, ipotecaria e catastale, bolli, notaio, imposta sostitutiva e spese del mutuo, rata, interessi, detrazione del primo anno e reddito consigliato. Regole in `src/lib/purchase.ts`.
+- **Sole ed esposizione**: dalla piantina e dall'orientamento dell'edificio (`facing`, in gradi), i lati con finestre di ogni appartamento e le ore di sole potenziali al solstizio d'inverno, all'equinozio e al solstizio d'estate (`src/lib/sun.ts`, `src/lib/exposure.ts`), senza le ombre dei vicini.
+- **Servizi a piedi**: metro, treni, tram e bus, spesa, scuole, farmacie, parchi e sport con i minuti a piedi lungo strade e marciapiedi, calcolati da OpenStreetMap.
+- **Prenota una visita**: in cantiere (solo per i cantieri in corso), in ufficio o in videochiamata, sui giorni e gli orari impostati dall'impresa, con il file `.ics` per il calendario.
 
 Nella demo l'area impresa salva i dati nel browser (`localStorage`): chi la prova vede le proprie modifiche, gli altri visitatori no. Il pulsante "Ripristina la demo" torna ai dati originali, "Copia i dati (JSON)" esporta la configurazione.
 
@@ -22,7 +30,7 @@ Nella demo l'area impresa salva i dati nel browser (`localStorage`): chi la prov
 ```bash
 npm install
 npm run dev              # sviluppo, http://localhost:3000/it/
-npm run build            # sito statico in out/, da caricare su qualsiasi hosting
+npm run build            # sito statico in out/, da caricare su qualsiasi hosting (prima crea le immagini AVIF: npm run images)
 npm run build:portable   # copia in portable/ che funziona anche da un sotto-percorso qualsiasi (anteprime, condivisioni)
 npm run lint && npm run typecheck
 node scripts/e2e.mjs            # test end-to-end su out/ (Chromium)
@@ -34,9 +42,9 @@ node scripts/e2e.mjs portable   # gli stessi test su portable/, servito da un so
 Ogni impresa è una cartella in `src/tenants/<id>/`:
 
 - `index.ts`: brand (nome, sigla del logo, colore, slogan, contatti) e progetti (fasi con peso e avanzamento, diario, appartamenti, tour, fonti), tutti i testi in italiano e inglese. Il modello dati è in `src/lib/types.ts`.
-- `maps/*.json`: la mappa della zona di ogni progetto, disegnata dai dati OpenStreetMap:
+- `maps/*.json`: la zona di ogni progetto dai dati OpenStreetMap: la mappa (un SVG in `public/media/maps/`) e i servizi vicini (trasporti, spesa, scuole, salute, parchi, sport) con i minuti a piedi, calcolati sul percorso più breve lungo strade e marciapiedi:
   ```bash
-  node scripts/build-map.mjs --bbox minLon,minLat,maxLon,maxLat --pin lat,lng --out src/tenants/<id>/maps/<progetto>.json
+  node scripts/build-map.mjs --center lat,lng --radius 1100 --id <progetto> --json src/tenants/<id>/maps/<progetto>.json [--label "Via …"]
   ```
 - `plans/*.ts`: la piantina di ogni edificio, da cui nasce il modello 3D (vedi sotto). Un progetto la collega con `building: "<id>"`; le fasi dello stesso edificio condividono la stessa piantina.
 - le foto e i panorami 360° (equirettangolari 2:1) in `public/media/`.
@@ -56,17 +64,19 @@ Le pareti si generano da sole dai contorni delle stanze: 30 cm verso l'esterno, 
 ## Struttura
 
 ```
-src/app/[locale]/(site)/        home, progetti, progetto, area impresa (con header e footer)
-src/app/[locale]/(immersive)/   tour a schermo intero
+src/app/[locale]/(site)/        home, progetti, progetto, scheda appartamento, area impresa (con header e footer)
+src/app/[locale]/(immersive)/   tour a schermo intero, edificio 3D
 src/app/(gate)/                 "/" → lingua del browser
 src/components/tour/            visore 360° (three.js) e controlli
 src/components/building3d/      modello 3D: dalla piantina alla geometria (plan.ts), motore three.js (engine.ts), console (Building3D.tsx), anteprima SVG
-src/components/project/         galleria, cronoprogramma, diario, appartamenti
+src/components/project/         galleria, cronoprogramma, diario, appartamenti, costi e mutuo, scheda e pianta dell'appartamento
+src/components/home/            contatti e prenotazione delle visite
 src/components/admin/           area impresa
-src/components/map/             mappa SVG da OpenStreetMap, senza servizi esterni
+src/components/map/             mappa SVG da OpenStreetMap con i servizi, senza servizi esterni
+src/lib/purchase.ts, sun.ts     costi d'acquisto e mutuo; posizione del sole ed esposizione
 src/i18n/dictionaries.ts        testi dell'interfaccia IT/EN
 src/lib/store.ts                dati sul client: originali o modificati dall'area impresa
-scripts/                        mappa, build portabile, test end-to-end
+scripts/                        mappa e servizi, immagini AVIF, build portabile, test end-to-end
 ```
 
 ## Prossimi passi per la versione commerciale
@@ -74,8 +84,8 @@ scripts/                        mappa, build portabile, test end-to-end
 - Database e account per l'area impresa, con le modifiche pubblicate per tutti i visitatori (oggi restano nel browser).
 - Caricamento di foto e panorami dall'area impresa, invece della scelta tra quelli già presenti.
 - Editor visuale della piantina nell'area impresa, e importazione da DXF o PDF dei disegni di progetto.
-- Invio reale del modulo contatti (email o CRM dell'impresa).
+- Invio reale del modulo contatti e delle richieste di visita (email, calendario o CRM dell'impresa).
 - Più imprese su un solo deploy, scelte in base al dominio, invece di una build per impresa.
-- Planimetrie degli appartamenti e notifiche ai clienti a ogni nuovo aggiornamento del diario.
+- Notifiche ai clienti a ogni nuovo aggiornamento del diario.
 
 Crediti delle immagini: `public/media/CREDITS.md`.

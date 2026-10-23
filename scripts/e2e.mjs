@@ -14,7 +14,7 @@ import { chromium, expect } from "@playwright/test";
 const mode = process.argv[2] === "portable" ? "portable" : "out";
 const dir = join(dirname(new URL(import.meta.url).pathname), "..", mode);
 const prefix = mode === "portable" ? "/preview/v1/" : "/";
-const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain" };
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".avif": "image/avif", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain" };
 
 const missing = [];
 const server = createServer(async (req, res) => {
@@ -103,6 +103,50 @@ await step("apartment filter and 'Chiedi info' pre-fill the form", async () => {
   await expect(page.locator("#contact-message")).toHaveValue(/appartamento B1/);
 });
 
+await step("nearby services: the map filters by category", async () => {
+  await page.goto(pageUrl("it/projects/grazioli-57-fase-2/"));
+  const pos = page.locator("#posizione");
+  await pos.scrollIntoViewIfNeeded();
+  await expect(pos).toContainText("Dergano");
+  await pos.getByRole("button", { name: "Scuole" }).click();
+  await expect(pos.locator("ol li")).toHaveCount(await pos.locator("[data-marker]").count());
+  await expect(pos.locator("ol")).not.toContainText("Dergano");
+});
+
+await step("costs: an apartment opens the calculator with its price", async () => {
+  await page.locator("#appartamenti tbody tr").filter({ hasText: "B1" }).getByRole("button", { name: /Calcola i costi/ }).click();
+  await expect(page.locator("#calc-price-grazioli-57-fase-2")).toHaveValue("468.000");
+  const costs = page.locator("#costi");
+  await expect(costs).toContainText("IVA 4%");
+  await expect(costs).toContainText("18.720 €");
+  await costs.getByRole("group", { name: "Prima casa" }).getByRole("button", { name: "No" }).click();
+  await expect(costs).toContainText("IVA 10%");
+  await expect(costs).toContainText("46.800 €");
+});
+
+await step("apartment sheet: plan, rooms, exposure and costs", async () => {
+  await page.locator("#appartamenti tbody tr").filter({ hasText: "B1" }).getByRole("link", { name: /Scheda appartamento/ }).click();
+  await expect(page.locator("h1")).toHaveText("B1");
+  await expect(page.getByRole("img", { name: /Grazioli 57, B1/ })).toBeVisible();
+  await expect(page.locator("article")).toContainText("Totale interni");
+  await expect(page.locator("article")).toContainText("Sud · Est · Nord");
+  await expect(page.locator("article")).toContainText("22.140 €");
+});
+
+await step("visit booking: a day, a time and a calendar file", async () => {
+  await page.goto(pageUrl("it/projects/grazioli-57-fase-2/"));
+  await page.getByRole("button", { name: "Prenota una visita" }).first().click();
+  const panel = page.locator("#contact-panel-visit");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("group", { name: "Giorno" }).getByRole("button").first().click();
+  await panel.getByRole("group", { name: "Ora" }).getByRole("button").first().click();
+  await page.fill("#visit-name", "Mario Rossi");
+  await page.fill("#visit-email", "mario@example.com");
+  await page.check("#visit-consent");
+  await panel.getByRole("button", { name: "Chiedi l'appuntamento" }).click();
+  await expect(panel.getByRole("link", { name: "Aggiungi al calendario" })).toBeVisible();
+});
+
 await step("admin changes show on the site", async () => {
   await page.goto(pageUrl("it/admin/"));
   await expect(page.locator("h1")).toHaveText("Area impresa");
@@ -145,11 +189,16 @@ await step("3D view: from the project page to a floor, an apartment and the cont
   await expect(page.locator("#contact-message")).toHaveValue(/appartamento B1/, { timeout: 15000 });
 });
 
-await step("3D view: theme, plan view, assembling and a link to one apartment", async () => {
+await step("3D view: sun, plan view, assembling and a link to one apartment", async () => {
   await page.goto(pageUrl("it/projects/grazioli-57-fase-1/3d/") + "#C2");
   await expect(page.locator(".b3d-right h2")).toHaveText("C2", { timeout: 15000 });
-  await page.getByRole("button", { name: "Gesso" }).click();
-  await expect(page.locator(".b3d")).toHaveAttribute("data-tema", "chiaro");
+  await expect(page.locator(".b3d-right")).toContainText("Esposizione");
+  await page.getByRole("button", { name: "Sole" }).click();
+  await expect(page.getByRole("button", { name: "Sole" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Estate" }).click();
+  await expect(page.locator(".b3d-sunrow")).toContainText("21 giugno");
+  await expect.poll(() => page.locator("[data-sun]").evaluate((e) => e.style.visibility), { timeout: 15000 }).toBe("visible");
+  await page.getByRole("button", { name: "Sole" }).click();
   await page.getByRole("button", { name: "Pianta" }).click();
   await expect(page.getByRole("button", { name: "Pianta" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
@@ -163,7 +212,7 @@ await step("phone: menu opens, no sideways scrolling", async () => {
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "it-IT" });
   const p = await phone.newPage();
   watch(p);
-  for (const path of ["it/", "it/projects/grazioli-57-fase-2/", "it/admin/", "en/projects/", "it/projects/grazioli-57-fase-2/3d/"]) {
+  for (const path of ["it/", "it/projects/grazioli-57-fase-2/", "it/projects/grazioli-57-fase-2/units/B1/", "it/admin/", "en/projects/", "it/projects/grazioli-57-fase-2/3d/"]) {
     await p.goto(pageUrl(path));
     const overflow = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) throw new Error(`${path} is ${overflow}px wider than the screen`);

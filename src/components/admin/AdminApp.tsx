@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { DEFAULT_HOURS } from "@/components/home/VisitBooking";
 import { AppLink } from "@/components/ui/AppLink";
 import { Icon } from "@/components/ui/Icon";
 import { Img } from "@/components/ui/Img";
 import { Bar, ProjectStatusChip, UnitStatusChip } from "@/components/ui/Status";
-import { floorLabel, inkOn, longDate, tr } from "@/lib/format";
+import { floorLabel, formatNumber, inkOn, longDate, tr } from "@/lib/format";
 import { useLocale } from "@/lib/locale";
 import { clamp, overallProgress, phaseState } from "@/lib/progress";
 import { resetTenant, saveTenant, useTenant } from "@/lib/store";
@@ -354,7 +355,7 @@ function DiaryPanel({
                 onClick={() => setForm((f) => ({ ...f, image: src }))}
                 className="overflow-hidden rounded-[3px] border-2 border-transparent aria-pressed:border-ink aria-pressed:ring-2 aria-pressed:ring-brand"
               >
-                <Img src={src} alt="" className="aspect-square w-full object-cover" />
+                <Img src={src} alt="" sizes="120px" className="aspect-square w-full object-cover" />
               </button>
             ))}
           </div>
@@ -373,7 +374,7 @@ function DiaryPanel({
         <ul className="grid gap-2">
           {updates.map((u) => (
             <li key={u.id} className="grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 rounded-[var(--radius)] border border-line p-2">
-              {u.image ? <Img src={u.image} alt="" className="h-12 w-14 rounded-[3px] object-cover" /> : <span className="h-12 w-14 rounded-[3px] bg-board-2" />}
+              {u.image ? <Img src={u.image} alt="" sizes="64px" className="h-12 w-14 rounded-[3px] object-cover" /> : <span className="h-12 w-14 rounded-[3px] bg-board-2" />}
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{tr(u.title, locale)}</span>
                 <span className="text-[0.8rem] text-mute">{longDate(u.date, locale)}</span>
@@ -400,7 +401,7 @@ function UnitsPanel({ project, onChange }: { project: Project; onChange: (fn: (p
   return (
     <ul className="grid gap-px overflow-hidden rounded-[var(--radius)] border border-line bg-line">
       {project.units.map((u, i) => (
-        <li key={u.id} className="grid grid-cols-[3rem_1fr] items-center gap-x-4 gap-y-3 bg-board p-3 sm:grid-cols-[3rem_1fr_auto_11rem]">
+        <li key={u.id} className="grid grid-cols-[3rem_1fr] items-center gap-x-4 gap-y-3 bg-board p-3 sm:grid-cols-[3rem_1fr_auto_9rem_11rem]">
           <span className="heading text-xl">{u.name}</span>
           <span className="text-[0.92rem]">
             {t.rooms(u.rooms)} · <span className="num">{u.area} m²</span>
@@ -411,6 +412,21 @@ function UnitsPanel({ project, onChange }: { project: Project; onChange: (fn: (p
           </span>
           <span className="hidden sm:block">
             <UnitStatusChip status={u.status} />
+          </span>
+          <span className="relative col-span-2 sm:col-span-1">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute">€</span>
+            <input
+              id={`unit-price-${project.slug}-${u.id}`}
+              className="input num min-h-10 py-1.5 pl-7"
+              inputMode="numeric"
+              placeholder={t.costs.onRequest}
+              value={u.price ? formatNumber(u.price, locale) : ""}
+              aria-label={`${t.project.price} ${u.name}`}
+              onChange={(e) => {
+                const n = Number(e.target.value.replace(/\D/g, ""));
+                onChange((p) => void (p.units[i].price = n > 0 ? n : null));
+              }}
+            />
           </span>
           <select
             id={`unit-status-${project.slug}-${u.id}`}
@@ -528,6 +544,7 @@ function InfoPanel({ project, onChange }: { project: Project; onChange: (fn: (p:
 function BrandPanel({ data, onChange }: { data: TenantData; onChange: (fn: (d: TenantData) => void) => void }) {
   const { locale, t } = useLocale();
   const b = data.brand;
+  const visits = b.visits ?? DEFAULT_HOURS;
   const field = (key: "name" | "monogram" | "email" | "phone" | "address", label: string, extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
     <label className="field">
       <span>{label}</span>
@@ -582,6 +599,59 @@ function BrandPanel({ data, onChange }: { data: TenantData; onChange: (fn: (d: T
           {field("email", t.admin.email, { type: "email" })}
           {field("phone", t.admin.phone, { type: "tel" })}
           <div className="sm:col-span-2">{field("address", t.admin.address)}</div>
+        </div>
+        <h3 className="label mt-2 text-mute">{t.visit.adminTitle}</h3>
+        <div className="grid gap-4">
+          <fieldset className="grid gap-2">
+            <legend className="mb-1.5 text-[0.85rem] font-semibold text-ink-2">{t.visit.adminDays}</legend>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                <label key={day} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-line-strong bg-board px-3 text-[0.9rem]">
+                  <input
+                    id={`visit-day-${day}`}
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--ink)]"
+                    checked={visits.days.includes(day)}
+                    onChange={(e) =>
+                      onChange((d) => {
+                        const v = (d.brand.visits ??= structuredClone(DEFAULT_HOURS));
+                        v.days = e.target.checked ? [...new Set([...v.days, day])].sort() : v.days.filter((x) => x !== day);
+                      })
+                    }
+                  />
+                  {t.visit.weekdays[day]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+            <label className="field">
+              <span>{t.visit.adminSlots}</span>
+              <input
+                id="visit-slots"
+                key={visits.slots.join()}
+                className="input num"
+                defaultValue={visits.slots.join(", ")}
+                onBlur={(e) => {
+                  const slots = [...new Set(e.target.value.match(/\b([01]?\d|2[0-3])[:.][0-5]\d\b/g) ?? [])].map((x) => x.replace(".", ":").padStart(5, "0")).sort();
+                  if (slots.length) onChange((d) => void ((d.brand.visits ??= structuredClone(DEFAULT_HOURS)).slots = slots));
+                }}
+              />
+            </label>
+            <label className="field">
+              <span>{t.visit.adminMinutes}</span>
+              <input
+                id="visit-minutes"
+                type="number"
+                min={15}
+                max={240}
+                step={15}
+                className="input num"
+                value={visits.minutes}
+                onChange={(e) => onChange((d) => void ((d.brand.visits ??= structuredClone(DEFAULT_HOURS)).minutes = Math.max(15, Number(e.target.value) || 60)))}
+              />
+            </label>
+          </div>
         </div>
       </div>
 

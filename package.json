@@ -2,15 +2,18 @@
   "name": "cantiere-live",
   "version": "0.1.0",
   "private": true,
-  "description": "Sito white-label per imprese edili: cantieri in corso, avanzamento lavori, case realizzate e tour virtuali 360°.",
+  "description": "Sito white-label per imprese edili: cantieri in corso, avanzamento lavori, case realizzate e tour virtuali 360\u00b0.",
   "scripts": {
+    "images": "node scripts/optimize-images.mjs",
+    "predev": "npm run images",
     "dev": "next dev",
+    "prebuild": "npm run images",
     "build": "next build",
-    "build:portable": "PORTABLE=1 next build && node scripts/make-portable.mjs",
+    "build:portable": "npm run images && PORTABLE=1 next build && node scripts/make-portable.mjs",
     "start": "npx serve out",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "map:fetch": "node scripts/fetch-map.mjs",
+    "map": "node scripts/build-map.mjs",
     "test:e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
@@ -28,6 +31,7 @@
     "@types/three": "^0.186.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "sharp": "^0.34.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
