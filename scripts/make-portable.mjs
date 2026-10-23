@@ -49,8 +49,9 @@ for (const file of pages) {
   const rel = "../".repeat(depth) || "./";
   let html = readFileSync(file, "utf8");
 
-  // Files: in attributes ("/x) and inside the escaped React payload (\"/x).
-  html = html.replace(/(\\?")\/(_next\/|media\/|icon\.svg)/g, (_, q, rest) => `${q}${rel}${rest === "_next/" ? "assets/_next/" : rest}`);
+  // Files: in attributes ("/x), inside the escaped React payload (\"/x), and after the first entry of a srcset
+  // (", /x").
+  html = html.replace(/(\\?"|, )\/(_next\/|media\/|icon\.svg)/g, (_, q, rest) => `${q}${rel}${rest === "_next/" ? "assets/_next/" : rest}`);
   // Pages: only real attributes; client-side links resolve through src/lib/paths.ts.
   html = html.replace(/(\shref=")\/((?:it|en)\/[^"]*|#[^"]*)?"/g, (_, attr, path = "") => `${attr}${pageLink(rel, path)}"`);
 
