@@ -35,6 +35,11 @@ const it = {
   apt: "app.",
   scale: "Pianta illustrativa",
   open: "Apri",
+  isolate: "Isola appartamento",
+  isolated: "isolato",
+  showAll: "Mostra tutto",
+  fullWalls: "Pareti intere",
+  cut: "Sezione a 1,2 m",
   groups: {
     day: "Zona giorno",
     night: "Camere",
@@ -101,6 +106,11 @@ const en: Strings3D = {
   apt: "apts",
   scale: "Illustrative plan",
   open: "Open",
+  isolate: "Isolate apartment",
+  isolated: "isolated",
+  showAll: "Show everything",
+  fullWalls: "Full-height walls",
+  cut: "Cut at 1.2 m",
   groups: {
     day: "Living areas",
     night: "Bedrooms",

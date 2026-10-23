@@ -7,7 +7,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { facadeBearing, facadeLight, type SunPosition } from "@/lib/sun";
 import type { Point } from "@/lib/types";
 import type { Palette, RGBA } from "./palette";
-import { facades, type Box, type Building, type Floor, type Room, type Seg } from "./plan";
+import { facades, unitPart, type Box, type Building, type Floor, type Room, type Seg } from "./plan";
 
 /* The imperative side of the 3D view: builds the floors as a technical drawing (translucent fills that only show the
    front-most surface, crisp edges, hidden edges dashed, a highlighter glow around the selection), eases the explode and focus state every frame, frames the camera on what is shown, and places the DOM
@@ -17,6 +17,8 @@ const FOV = 28;
 /** Extra metres between floors at full explode, and the extra lift of the floors above a focused one. */
 const GAP = 4.2;
 const LIFT = 6;
+/** Height of the section through an isolated apartment, above its floor. */
+const CUT = 1.2;
 const VIEWS = {
   axo: { az: 36, el: 30 },
   plan: { az: 0, el: 89 },
@@ -69,6 +71,10 @@ interface FloorRT {
   outlines: Map<string, { line: LineMaterial; halo: LineMaterial; show: number }>;
   /** The outside walls, lit in sun mode: one sheet per façade, with the bearing it faces. */
   lit: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; bearing: number }[];
+  /** The floor's own drawing, hidden while one apartment is shown on its own. */
+  base: THREE.Object3D[];
+  /** Apartments of this floor drawn on their own, built the first time they are isolated (key: unit and cut). */
+  iso: Map<string, THREE.Group | null>;
   y: number;
   dim: number;
   lift: number;
@@ -142,6 +148,9 @@ export class BuildingEngine {
     radius: number;
   } | null = null;
   private compass: LineMaterial | null = null;
+  private isolate = { on: false, cut: true };
+  /** Cut tops of the walls of an isolated apartment, filled like the walls of a plan section. */
+  private capMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.86, depthWrite: false, side: THREE.DoubleSide });
 
   constructor(
     host: HTMLElement,
@@ -224,6 +233,7 @@ export class BuildingEngine {
     setRGB(this.dims.line.color, p.mute);
     setRGB(this.context.color, p.mute);
     if (this.compass) setRGB(this.compass.color, p.ink);
+    setRGB(this.capMat.color, p.ink);
     for (const rt of this.floors) for (const l of rt.lit) setRGB(l.mat.color, p.signal);
     if (this.sunRT) {
       setRGB(this.sunRT.path.mat.color, p.ink);
@@ -291,6 +301,14 @@ export class BuildingEngine {
     if (changed) this.frame(true, 0.7);
   }
 
+  /** Shows the selected apartment on its own (`on`), its walls cut at CUT unless `cut` is false. */
+  setIsolate(on: boolean, cut: boolean) {
+    const changed = on !== this.isolate.on;
+    this.isolate = { on, cut };
+    this.dirty = true;
+    if (changed) this.frame(true, 0.7);
+  }
+
   setHover(roomId: string | null) {
     this.hoverRoom = roomId;
     this.dirty = true;
@@ -350,6 +368,7 @@ export class BuildingEngine {
     this.controls.dispose();
     for (const d of this.disposables) d.dispose();
     this.depthMat.dispose();
+    this.capMat.dispose();
     this.renderer.dispose();
     el.remove();
   }
@@ -506,10 +525,84 @@ export class BuildingEngine {
       tiles,
       outlines,
       lit,
+      base: [depth, fillMesh, edges.obj, hidden.obj, details.obj, railings.obj],
+      iso: new Map(),
       y: 0,
       dim: 0,
       lift: 0,
     };
+  }
+
+  /** Line segments drawn with an existing material (so they fade with their floor). */
+  private linesWith(segs: Seg[] | Float32Array, mat: LineMaterial, order: number) {
+    const pos =
+      segs instanceof Float32Array
+        ? segs
+        : new Float32Array(
+            segs.flatMap((sg) => {
+              const a = this.world(sg[0], sg[1], sg[2]);
+              const b = this.world(sg[3], sg[4], sg[5]);
+              return [a.x, a.y, a.z, b.x, b.y, b.z];
+            }),
+          );
+    const geo = new LineSegmentsGeometry();
+    geo.setPositions(pos);
+    const obj = new LineSegments2(geo, mat);
+    if (mat.dashed) obj.computeLineDistances();
+    obj.renderOrder = order;
+    obj.raycast = () => {};
+    this.disposables.push(geo);
+    return obj;
+  }
+
+  /** One apartment of a floor on its own, in the floor's materials; null if it has nothing on that floor. */
+  private isoGroup(rt: FloorRT, unitId: string, cut: boolean): THREE.Group | null {
+    const key = `${unitId}:${cut}`;
+    if (rt.iso.has(key)) return rt.iso.get(key)!;
+    const part = unitPart(rt.f, this.b.plan, unitId, cut ? CUT : null);
+    let group: THREE.Group | null = null;
+    if (part) {
+      group = new THREE.Group();
+      const slab = this.b.plan.slab;
+      const parts: THREE.BufferGeometry[] = part.slabs.map((sl) => {
+        const g = new THREE.ExtrudeGeometry(this.shape(sl.poly), { depth: sl.thick, bevelEnabled: false });
+        g.rotateX(-Math.PI / 2);
+        g.translate(0, slab - sl.thick, 0);
+        return g.toNonIndexed();
+      });
+      for (const w of part.walls) parts.push(this.boxGeometry(w));
+      const solid = mergeGeometries(parts);
+      parts.forEach((g) => g.dispose());
+      this.disposables.push(solid);
+      const fill = new THREE.Mesh(solid, rt.fill);
+      fill.renderOrder = 1;
+      const depth = new THREE.Mesh(solid, this.depthMat);
+      depth.renderOrder = 0;
+      fill.raycast = depth.raycast = () => {};
+      const edgePos = new THREE.EdgesGeometry(solid, 25).attributes.position.array as Float32Array;
+      group.add(depth, fill, this.linesWith(edgePos, rt.edges, 4), this.linesWith(edgePos, rt.hidden, 2));
+      group.add(this.linesWith(part.details, rt.details, 3), this.linesWith(part.railings, rt.railings, 3));
+      if (part.caps.length) {
+        const caps = mergeGeometries(
+          part.caps.map((c) => {
+            const g = new THREE.PlaneGeometry(c.x1 - c.x0, c.y1 - c.y0);
+            g.rotateX(-Math.PI / 2);
+            const at = this.world((c.x0 + c.x1) / 2, c.h0 + 0.004, (c.y0 + c.y1) / 2);
+            g.translate(at.x, at.y, at.z);
+            return g;
+          }),
+        );
+        this.disposables.push(caps);
+        const capMesh = new THREE.Mesh(caps, this.capMat);
+        capMesh.renderOrder = 2;
+        capMesh.raycast = () => {};
+        group.add(capMesh);
+      }
+      group.visible = false;
+      rt.group.add(group);
+    }
+    rt.iso.set(key, group);
+    return group;
   }
 
   /** A north arrow on the ground, left of the building. */
@@ -626,6 +719,8 @@ export class BuildingEngine {
   }
 
   private targetLift(rt: FloorRT) {
+    // On its own, an apartment needs no room made above it.
+    if (this.isolate.on && this.focus.unit) return 0;
     const sel = this.floors.find((x) => x.f.id === this.focus.floor);
     return sel && rt.f.level > sel.f.level ? LIFT : 0;
   }
@@ -641,7 +736,16 @@ export class BuildingEngine {
       const [x0, y0, x1, y1] = unit.bounds;
       const m = 1.5;
       box.expandByPoint(this.world(x0 - m, 0, y0 - m, y));
-      box.expandByPoint(this.world(x1 + m, this.b.wallHeight, y1 + m, y));
+      box.expandByPoint(this.world(x1 + m, this.isolate.on && this.isolate.cut ? CUT : this.b.wallHeight, y1 + m, y));
+      // On its own, its other floors too (a terrace on the roof).
+      if (this.isolate.on)
+        for (const rt of this.floors) {
+          if (rt === unitRT) continue;
+          const own = rt.f.rooms.filter((r) => r.unitId === unit.unitId);
+          if (!own.length) continue;
+          const ry = this.floorY(rt, this.explode, 0);
+          for (const r of own) for (const [px, py] of r.poly) box.expandByPoint(this.world(px, 1.1, py, ry));
+        }
       return box;
     }
     const sel = this.floors.filter((x) => !this.focus.floor || x.f.id === this.focus.floor);
@@ -749,7 +853,7 @@ export class BuildingEngine {
   /** The room under the pointer, on the floors in play. */
   private pick(): string | null {
     this.raycaster.setFromCamera(new THREE.Vector2(this.pointer.x, this.pointer.y), this.camera);
-    const meshes = this.floors.filter((rt) => rt.dim < 0.5).flatMap((rt) => rt.tiles.map((t) => t.mesh));
+    const meshes = this.floors.filter((rt) => rt.dim < 0.5 && rt.group.visible).flatMap((rt) => rt.tiles.filter((t) => t.mesh.visible).map((t) => t.mesh));
     const hit = this.raycaster.intersectObjects(meshes, false)[0];
     return (hit?.object.userData.roomId as string | undefined) ?? null;
   }
@@ -774,8 +878,14 @@ export class BuildingEngine {
     const selUnit = this.focus.unit;
     const hoverUnit = this.hoverRoom ? (this.floors.flatMap((rt) => rt.tiles).find((t) => t.room.id === this.hoverRoom)?.room.unitId ?? null) : null;
 
+    const isoUnit = this.isolate.on ? this.focus.unit : null;
     for (const rt of this.floors) {
-      const dimT = this.focus.floor && rt.f.id !== this.focus.floor ? 1 : 0;
+      // Isolated: the apartment's own drawing on the floors it has rooms on, nothing else.
+      const isoHere = isoUnit && rt.f.rooms.some((r) => r.unitId === isoUnit) ? this.isoGroup(rt, isoUnit, this.isolate.cut) : null;
+      rt.group.visible = !isoUnit || !!isoHere;
+      for (const o of rt.base) o.visible = !isoHere;
+      for (const g of rt.iso.values()) if (g) g.visible = g === isoHere;
+      const dimT = isoHere ? 0 : this.focus.floor && rt.f.id !== this.focus.floor ? 1 : 0;
       rt.dim = step(rt.dim, dimT, 7);
       rt.lift = step(rt.lift, this.targetLift(rt), 7);
       rt.y = this.floorY(rt, this.explodeNow, rt.lift);
@@ -783,7 +893,7 @@ export class BuildingEngine {
 
       const d = rt.dim;
       rt.fill.opacity = THREE.MathUtils.lerp(pal.fillAlpha, pal.dimAlpha, d);
-      rt.depth.visible = d < 0.5;
+      rt.depth.visible = d < 0.5 && !isoHere;
       rt.edges.opacity = THREE.MathUtils.lerp(pal.dark ? 0.62 : 0.7, pal.dark ? 0.06 : 0.09, d);
       rt.hidden.opacity = THREE.MathUtils.lerp(pal.hiddenAlpha, 0, d);
       rt.details.opacity = THREE.MathUtils.lerp(0.75, 0.03, d);
@@ -798,9 +908,10 @@ export class BuildingEngine {
         if (t.emph > 0.001) t.mat.color.lerp(this.signal, t.emph * 0.75);
         const base = pal.tileAlpha * (t.room.outdoor ? 0.7 : 1);
         t.mat.opacity = (base + t.hot * 0.22 + t.emph * 0.16) * (1 - 0.95 * d);
+        t.mesh.visible = !isoHere || t.room.unitId === isoUnit;
       }
       for (const l of rt.lit) {
-        const o = this.sun ? 0.5 * facadeLight(l.bearing, this.sun.now) * (1 - 0.95 * d) : 0;
+        const o = this.sun && !isoUnit ? 0.5 * facadeLight(l.bearing, this.sun.now) * (1 - 0.95 * d) : 0;
         l.mat.opacity = o;
         l.mesh.visible = o > 0.005;
       }
@@ -813,10 +924,12 @@ export class BuildingEngine {
         o.halo.visible = o.halo.opacity > 0.01;
       }
     }
-    this.dims.group.visible = this.layers.dims;
-    this.dims.line.opacity = 0.8 * (1 - (this.floors[0]?.dim ?? 0));
-    this.context.opacity = 0.35 * (1 - (this.floors[0]?.dim ?? 0));
-    if (this.compass) this.compass.opacity = 0.75 * (1 - (this.floors[0]?.dim ?? 0));
+    // The ground floor's dimensions, street and north arrow belong to the whole building.
+    const ground = isoUnit ? 0 : 1 - (this.floors[0]?.dim ?? 0);
+    this.dims.group.visible = this.layers.dims && !isoUnit;
+    this.dims.line.opacity = 0.8 * ground;
+    this.context.opacity = 0.35 * ground;
+    if (this.compass) this.compass.opacity = 0.75 * ground;
 
     if (this.anim) {
       const a = this.anim;
@@ -947,16 +1060,17 @@ export class BuildingEngine {
     const g = this.floors[0];
     if (g) {
       const { x0, x1, y0, y1 } = this.b;
-      const showDims = this.layers.dims && g.dim < 0.5;
+      const whole = !(this.isolate.on && sel.unit);
+      const showDims = this.layers.dims && g.dim < 0.5 && whole;
       const pw = this.screen(this.world((x0 + x1) / 2, 0, y0 - 2.4, g.y));
       const pd = this.screen(this.world(x0 - 2.4, 0, (y0 + y1) / 2, g.y));
       this.place(this.els.dims.get("w"), showDims && pw.ok, pw.x, pw.y);
       this.place(this.els.dims.get("d"), showDims && pd.ok, pd.x, pd.y);
       const ps = this.screen(this.world((x0 + x1) / 2, -0.3, y0 - 8, g.y));
-      this.place(this.els.street, g.dim < 0.5 && ps.ok && !this.sun, ps.x, ps.y);
+      this.place(this.els.street, g.dim < 0.5 && ps.ok && !this.sun && whole, ps.x, ps.y);
       if (this.compass) {
         const pn = this.screen(this.world(this.compassTip[0], 0, this.compassTip[1], g.y));
-        this.place(this.els.north, g.dim < 0.5 && pn.ok, pn.x, pn.y);
+        this.place(this.els.north, g.dim < 0.5 && pn.ok && whole, pn.x, pn.y);
       }
     }
 

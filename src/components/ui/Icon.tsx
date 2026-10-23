@@ -137,6 +137,12 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M14 3v4h4M9 12h6M9 16h6" />
     </>
   ),
+  focus: (
+    <>
+      <path d="M4 8.5V4h4.5M15.5 4H20v4.5M20 15.5V20h-4.5M8.5 20H4v-4.5" />
+      <path d="M12 8 16 10v4l-4 2-4-2v-4z" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="8.5" />

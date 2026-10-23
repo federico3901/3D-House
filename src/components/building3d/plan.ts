@@ -215,10 +215,7 @@ const seg = (p: Point, hp: number, q: Point, hq: number): Seg => [p[0], hp, p[1]
 type Zone = { unit: string; room: Room | null; outside: boolean };
 
 function prepareFloor(f: PlanFloor, plan: BuildingPlan, wallHeight: number): Floor {
-  const rooms: Room[] = [
-    ...f.units.flatMap((u) => u.rooms.map((r) => room(r, u.unitId))),
-    ...f.common.map((r) => room(r, null, f.id)),
-  ];
+  const rooms: Room[] = [...f.units.flatMap((u) => u.rooms.map((r) => room(r, u.unitId))), ...f.common.map((r) => room(r, null, f.id))];
   const indoor = rooms.filter((r) => !r.outdoor);
 
   const zone = (p: Point): Zone => {
@@ -477,4 +474,90 @@ export function unitFacades(plan: BuildingPlan, unitId: string): Facade[] {
     }
   }
   return all.filter((fc) => found.has(fc));
+}
+
+/* ---------------------------------------------------------------- one apartment */
+
+export interface UnitPart {
+  walls: Box[];
+  /** Tops of the walls where the section cuts them. */
+  caps: Box[];
+  slabs: { poly: Point[]; thick: number }[];
+  details: Seg[];
+  railings: Seg[];
+}
+
+/** An apartment on one floor, on its own: the walls around and inside it (party walls trimmed to its side), its
+    floor, the symbols of its doors and windows and its railings. With `cut`, everything stops at that height, as in
+    a plan section, and the cut tops of the walls come back as caps. Null when the apartment has nothing here. */
+export function unitPart(f: Floor, plan: BuildingPlan, unitId: string, cut: number | null): UnitPart | null {
+  const own = f.rooms.filter((r) => r.unitId === unitId);
+  if (!own.length) return null;
+  // On a roof the terraces have parapets; below, the walls are those of the rooms inside.
+  const bounding = f.roof ? own : own.filter((r) => !r.outdoor);
+  const edges = (bounding.length ? bounding : own).flatMap((r) => edgesOf(r.poly));
+  const tol = 0.02;
+
+  const walls: Box[] = [];
+  for (const w of f.walls) {
+    const wx = w.x1 - w.x0;
+    const wy = w.y1 - w.y0;
+    for (const horiz of wx > wy + EPS ? [true] : wy > wx + EPS ? [false] : [true, false]) {
+      const c = horiz ? (w.y0 + w.y1) / 2 : (w.x0 + w.x1) / 2;
+      const [a, b] = horiz ? [w.x0, w.x1] : [w.y0, w.y1];
+      const t = horiz ? wy : wx;
+      // The stretches of this wall along the apartment's edges, reaching into the corners.
+      const spans = edges
+        .filter((e) => e.horiz === horiz && Math.abs(e.c - c) < tol && Math.min(b, e.s1) - Math.max(a, e.s0) > tol)
+        .map((e) => [Math.max(a, e.s0 - t / 2), Math.min(b, e.s1 + t / 2)])
+        .sort((p, q) => p[0] - q[0]);
+      const merged: number[][] = [];
+      for (const s of spans) {
+        const last = merged[merged.length - 1];
+        if (last && s[0] <= last[1] + EPS) last[1] = Math.max(last[1], s[1]);
+        else merged.push([...s]);
+      }
+      for (const [s0, s1] of merged) walls.push(horiz ? { ...w, x0: s0, x1: s1 } : { ...w, y0: s0, y1: s1 });
+      if (merged.length) break;
+    }
+  }
+
+  const near = (sg: Seg, d: number) => {
+    const m: Point = [(sg[0] + sg[3]) / 2, (sg[2] + sg[5]) / 2];
+    return own.some((r) => inside(m, r.poly) || edgeDistance(m, r.poly) < d);
+  };
+  const clip = (segs: Seg[]): Seg[] => {
+    if (cut === null) return segs;
+    const out: Seg[] = [];
+    for (const [x0, h0, y0, x1, h1, y1] of segs) {
+      if (h0 > cut && h1 > cut) continue;
+      if (h0 <= cut && h1 <= cut) {
+        out.push([x0, h0, y0, x1, h1, y1]);
+        continue;
+      }
+      const k = (cut - h0) / (h1 - h0);
+      const xc = x0 + (x1 - x0) * k;
+      const yc = y0 + (y1 - y0) * k;
+      out.push(h0 <= cut ? [x0, h0, y0, xc, cut, yc] : [xc, cut, yc, x1, h1, y1]);
+    }
+    return out;
+  };
+
+  const caps: Box[] = [];
+  const kept: Box[] = [];
+  for (const w of walls) {
+    if (cut === null || w.h1 <= cut) kept.push(w);
+    else if (w.h0 < cut) {
+      kept.push({ ...w, h1: cut });
+      caps.push({ ...w, h0: cut, h1: cut });
+    }
+  }
+
+  return {
+    walls: kept,
+    caps,
+    slabs: own.filter((r) => r.kind !== "garden").map((r) => ({ poly: r.poly, thick: r.kind === "balcony" ? 0.18 : plan.slab })),
+    details: clip(f.details.filter((sg) => near(sg, 0.35))),
+    railings: clip(f.railings.filter((sg) => near(sg, 0.12))),
+  };
 }

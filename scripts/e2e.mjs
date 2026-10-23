@@ -185,6 +185,15 @@ await step("3D view: from the project page to a floor, an apartment and the cont
   await page.locator(".b3d-right .b3d-row", { hasText: "B1" }).click();
   await expect(page.locator(".b3d-right h2")).toHaveText("B1");
   await expect(page.locator(".b3d-right")).toContainText("Soggiorno con cucina");
+  // On its own, walls cut, then whole, then back to the building with Escape, still on B1.
+  await page.getByRole("button", { name: "Isola appartamento" }).click();
+  await expect(page.locator(".b3d")).toHaveAttribute("data-isolated", "true");
+  await expect(page.locator(".b3d-isobar")).toContainText("Sezione a 1,2 m");
+  await page.locator(".b3d-isobar").getByRole("button", { name: "Pareti intere" }).click();
+  await expect(page.locator(".b3d-isobar")).not.toContainText("Sezione a 1,2 m");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".b3d-isobar")).toHaveCount(0);
+  await expect(page.locator(".b3d-right h2")).toHaveText("B1");
   await page.locator(".b3d-right").getByRole("link", { name: "Chiedi info" }).click();
   await expect(page.locator("#contact-message")).toHaveValue(/appartamento B1/, { timeout: 15000 });
 });

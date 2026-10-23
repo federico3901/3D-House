@@ -457,6 +457,62 @@
     box-shadow: 0 2px 8px var(--shadow);
   }
 
+  /* An apartment on its own */
+  .b3d-isobar {
+    position: absolute;
+    z-index: 12;
+    top: var(--gap);
+    left: calc(var(--left-w) + 2 * var(--gap) + (100% - var(--left-w) - var(--right-w) - 4 * var(--gap)) / 2);
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 14px;
+    max-width: calc(100% - var(--left-w) - var(--right-w) - 6 * var(--gap));
+    padding: 6px 6px 6px 14px;
+    background: var(--board);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--signal);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  .b3d-isoname {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  .b3d-isoname b {
+    font-family: var(--font-display);
+    font-stretch: 108%;
+    font-size: 1.05rem;
+  }
+  .b3d-isoname small {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+  .b3d-isobar .b3d-layer {
+    width: auto;
+  }
+  .b3d[data-isolated="true"] .b3d-cartouche {
+    display: none;
+  }
+  .b3d-pillrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .b3d-isolate {
+    min-height: 34px;
+  }
+
   /* Boards */
   .b3d-panel {
     position: absolute;
@@ -1034,6 +1090,15 @@
     }
     .b3d-cartouche > :not(:first-child) {
       display: none;
+    }
+    .b3d-isobar {
+      top: 52px;
+      left: 50%;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      width: calc(100% - 16px);
+      max-width: none;
+      padding-left: 10px;
     }
     .b3d-cartouche {
       top: 56px;

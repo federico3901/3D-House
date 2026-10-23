@@ -55,6 +55,10 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
   const [sunOn, setSunOn] = useState(false);
   const [season, setSeason] = useState<Season>("equinox");
   const [hour, setHour] = useState(13);
+  // The selected apartment on its own, cut at 1.2 m unless the walls are asked for whole.
+  const [isolated, setIsolated] = useState(false);
+  const [fullWalls, setFullWalls] = useState(false);
+  const isoOn = isolated && focus.unit !== null;
 
   // The sun over the building: its path on the chosen day, and where it is at the chosen time.
   const lat = projects[0]?.location.lat;
@@ -77,6 +81,7 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
       }
       setFocus(next);
       setSheet(next.floor !== null);
+      if (!next.unit) setIsolated(false);
     },
     [floorOfUnit],
   );
@@ -117,6 +122,7 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
   useEffect(() => engine.current?.setFocus(focus), [focus]);
   useEffect(() => engine.current?.setLayers(layers), [layers]);
   useEffect(() => engine.current?.setHover(hover), [hover]);
+  useEffect(() => engine.current?.setIsolate(isoOn, !fullWalls), [isoOn, fullWalls]);
   useEffect(() => {
     if (!sunOn || !sunDay || lat === undefined || lng === undefined) return void engine.current?.setSun(null);
     const h = Math.min(Math.max(hour, sunDay.rise), sunDay.set);
@@ -134,22 +140,24 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
       const isNarrow = w < 860;
       setNarrow(isNarrow);
       const pads: Pads = isNarrow
-        ? { t: 56, l: 0, r: 0, b: 64 + (sheet ? Math.round(h * 0.46) : 0) }
+        ? { t: isoOn ? 104 : 56, l: 0, r: 0, b: 64 + (sheet ? Math.round(h * 0.46) : 0) }
         : { t: 40, l: (w < 1100 ? 224 : 252) + 24, r: (w < 1100 ? 336 : 372) + 24, b: 72 };
       engine.current?.setPads(pads);
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [sheet, failed]);
+  }, [sheet, failed, isoOn]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") select(focus.unit ? { floor: focus.floor, unit: null } : NONE);
+      if (e.key !== "Escape") return;
+      if (isoOn) setIsolated(false);
+      else select(focus.unit ? { floor: focus.floor, unit: null } : NONE);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focus, select]);
+  }, [focus, select, isoOn]);
 
   const roomName = (r: Room) => (r.name ? tr(r.name, locale) : s.kinds[r.kind]);
   const floorCode = (f: Floor) => s.code(f.level, f.roof);
@@ -162,7 +170,7 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
   const back = `/${locale}/projects/${slug}/`;
 
   return (
-    <div ref={rootRef} className="b3d" data-narrow={narrow ? "true" : "false"}>
+    <div ref={rootRef} className="b3d" data-narrow={narrow ? "true" : "false"} data-isolated={isoOn ? "true" : undefined}>
       <Header />
       <div className="b3d-toolbar">
         <AppLink href={back} className="b3d-back-link">
@@ -301,6 +309,23 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
           </div>
 
           {failed && <p className="b3d-failed">{s.unsupported}</p>}
+          {isoOn && (
+            <div className="b3d-isobar" role="group" aria-label={`${focus.unit} ${s.isolated}`}>
+              <span className="b3d-isoname">
+                <Icon name="focus" size={17} />
+                <b>{focus.unit}</b> <span className="b3d-bl">{s.isolated}</span>
+                {!fullWalls && <small className="b3d-bl">{s.cut}</small>}
+              </span>
+              <button type="button" className="b3d-layer" aria-pressed={fullWalls} onClick={() => setFullWalls((x) => !x)}>
+                <span>{s.fullWalls}</span>
+                <i className="b3d-switch" />
+              </button>
+              <button type="button" className="b3d-tool" onClick={() => setIsolated(false)} aria-label={s.showAll} title={s.showAll}>
+                <Icon name="close" size={16} />
+                <span className="b3d-bl">{s.showAll}</span>
+              </button>
+            </div>
+          )}
           <p className="b3d-hint" data-hidden={hint ? undefined : "true"}>
             {s.hint}
           </p>
@@ -376,6 +401,8 @@ export function Building3D({ plan, slug }: { plan: BuildingPlan; slug: string })
               floor={focusFloor}
               roof={building.floors.find((f) => f.roof)}
               onBack={() => select({ floor: focusFloor.id, unit: null })}
+              isolated={isoOn}
+              onIsolate={() => setIsolated((x) => !x)}
               onHover={setHover}
               roomName={roomName}
               sun={sunHere[focus.unit]}
@@ -540,11 +567,15 @@ function UnitDossier({
   onHover,
   roomName,
   sun,
+  isolated,
+  onIsolate,
   locale,
   s,
   t,
 }: {
   sun?: UnitSun;
+  isolated: boolean;
+  onIsolate: () => void;
   locale: Locale;
   s: Strings3D;
   t: Dict;
@@ -573,8 +604,12 @@ function UnitDossier({
         <p className="b3d-meta">
           {t.rooms(unit.rooms)} · {s.floor} {floorLabel(unit.floor, locale)} · {project.name} · {tr(project.subtitle, locale).split("·")[0].trim()}
         </p>
-        <span>
+        <span className="b3d-pillrow">
           <StatusPill status={unit.status} label={t.unitStatus[unit.status]} />
+          <button type="button" className="b3d-tool b3d-isolate" aria-pressed={isolated} onClick={onIsolate}>
+            <Icon name="focus" size={16} />
+            {isolated ? s.showAll : s.isolate}
+          </button>
         </span>
       </div>
       <div className="b3d-kpis b3d-pad">
